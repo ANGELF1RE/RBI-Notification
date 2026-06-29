@@ -30,6 +30,29 @@ jobs:
           echo "--- First 1000 chars ---"
           head -c 1000 rbi_page.html
 
+
+      - name: Debug VIEWSTATE decode
+        run: |
+          python3 - <<'EOF'
+          import re, base64
+
+          with open('rbi_page.html', 'r', encoding='utf-8', errors='ignore') as f:
+              content = f.read()
+
+          viewstate_match = re.search(r'__VIEWSTATE[^>]*value="([^"]+)"', content)
+          if viewstate_match:
+              try:
+                  decoded = base64.b64decode(viewstate_match.group(1)).decode('utf-8', errors='ignore')
+                  # Find and print 200 chars around id=1344
+                  for m in re.finditer(r'.{0,100}id=1344\d.{0,100}', decoded):
+                      print("FOUND:", m.group())
+                      print("---")
+              except Exception as e:
+                  print(f"Error: {e}")
+          else:
+              print("No VIEWSTATE found")
+          EOF
+
       - name: Debug link structure
         run: |
           set -e
@@ -56,41 +79,63 @@ jobs:
         if: steps.check.outputs.new_found == 'true'
         run: |
           python3 - <<'EOF'
-          import re, json
+          import re, json, base64
 
           with open('rbi_page.html', 'r', encoding='utf-8', errors='ignore') as f:
               content = f.read()
 
           prev_id = int("${{ steps.check.outputs.prev_id }}")
 
-          # Print raw sample around any id= reference > prev_id for debugging
-          for m in re.finditer(r'.{0,80}id=(\d+).{0,80}', content):
-              if int(m.group(1)) > prev_id:
-                  print("SAMPLE:", m.group())
-                  break
+          # The links are inside base64 encoded VIEWSTATE - decode it first
+          viewstate_match = re.search(r'__VIEWSTATE[^>]*value="([^"]+)"', content)
+          decoded_text = ""
+          if viewstate_match:
+              try:
+                  decoded_text = base64.b64decode(viewstate_match.group(1)).decode('utf-8', errors='ignore')
+                  print(f"Decoded VIEWSTATE length: {len(decoded_text)}")
+              except Exception as e:
+                  print(f"Decode error: {e}")
 
-          pattern = r'[Bb][Ss]_[Vv]iew[Mm]as[Dd]irections\.aspx\?id=(\d+)[^"]*"[^>]*>([^<]{10,})</a>'
-          matches = re.findall(pattern, content)
+          # Search in both raw HTML and decoded viewstate
+          search_text = content + decoded_text
+
+          # Pattern 1: unquoted href (as seen in VIEWSTATE)
+          matches1 = re.findall(r'href=BS_ViewMasDirections\.aspx\?id=(\d+)>([^<]+)<', search_text)
+          # Pattern 2: quoted href
+          matches2 = re.findall(r'href=["\']?[^"\']*BS_ViewMasDirections\.aspx\?id=(\d+)["\']?[^>]*>([^<]{10,})</a>', search_text)
+          # Pattern 3: just grab all ids and titles near them
+          matches3 = re.findall(r'id=(\d+)>([A-Z][^<]{20,})</a>', search_text)
+
+          print(f"Pattern 1 matches: {len(matches1)}")
+          print(f"Pattern 2 matches: {len(matches2)}")
+          print(f"Pattern 3 matches: {len(matches3)}")
+
+          # Show samples for debugging
+          for m in (matches1 or matches2 or matches3)[:3]:
+              print(f"Sample: {m}")
+
+          all_matches = matches1 + matches2 + matches3
 
           new_items = []
           seen = set()
-          for id_str, title in matches:
-              if int(id_str) > prev_id and id_str not in seen:
+          for id_str, title in all_matches:
+              title = title.strip()
+              if (int(id_str) > prev_id and id_str not in seen
+                      and len(title) > 15 and 'PDF' not in title
+                      and title[0].isupper()):
                   seen.add(id_str)
-                  clean_title = title.strip()
-                  if clean_title and 'PDF' not in clean_title:
-                      new_items.append({
-                          'id': id_str,
-                          'title': clean_title,
-                          'url': f'https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id={id_str}'
-                      })
+                  new_items.append({
+                      'id': id_str,
+                      'title': title,
+                      'url': f'https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id={id_str}'
+                  })
 
           new_items.sort(key=lambda x: int(x['id']), reverse=True)
 
           with open('new_directions.json', 'w') as f:
               json.dump(new_items, f, indent=2)
 
-          print(f"Found {len(new_items)} new directions")
+          print(f"\nFound {len(new_items)} new directions")
           for item in new_items:
               print(f"  [{item['id']}] {item['title']}")
           EOF
