@@ -41,7 +41,9 @@ jobs:
               content = f.read()
 
           prev_id = int("${{ steps.check.outputs.prev_id }}")
-          pattern = r'href="[^"]*id=(\d+)"[^>]*>([^<]+)</a>'
+
+          # Match both href patterns RBI uses
+          pattern = r'[Bb][Ss]_[Vv]iew[Mm]as[Dd]irections\.aspx\?id=(\d+)[^"]*"[^>]*>([^<]{10,})</a>'
           matches = re.findall(pattern, content)
 
           new_items = []
@@ -49,11 +51,13 @@ jobs:
           for id_str, title in matches:
               if int(id_str) > prev_id and id_str not in seen:
                   seen.add(id_str)
-                  new_items.append({
-                      'id': id_str,
-                      'title': title.strip(),
-                      'url': f'https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id={id_str}'
-                  })
+                  clean_title = title.strip()
+                  if clean_title and 'PDF' not in clean_title:
+                      new_items.append({
+                          'id': id_str,
+                          'title': clean_title,
+                          'url': f'https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id={id_str}'
+                      })
 
           new_items.sort(key=lambda x: int(x['id']), reverse=True)
 
