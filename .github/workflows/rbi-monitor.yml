@@ -28,10 +28,17 @@ jobs:
 
       - name: Fetch RBI page
         run: |
-          curl -s "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx" \
-            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            -o rbi_page.html
-          echo "Page fetched. Size: $(wc -c < rbi_page.html) bytes"
+          curl -v "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" \
+            -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+            -H "Accept-Language: en-US,en;q=0.5" \
+            -L \
+            -o rbi_page.html \
+            -w "\nHTTP Status: %{http_code}\nSize: %{size_download} bytes\n"
+          
+          echo "File exists: $(ls -la rbi_page.html 2>/dev/null || echo 'NO FILE')"
+          echo "First 500 chars:"
+          head -c 500 rbi_page.html || echo "Cannot read file"
 
       - name: Check for new directions
         id: check
