@@ -9,40 +9,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Debug - show link structure
-        run: |
-          python3 - <<'EOF'
-          import re
-
-          with open('rbi_page.html', 'r', encoding='utf-8', errors='ignore') as f:
-              content = f.read()
-
-          # Find ALL links containing 'id=' and print raw HTML around them
-          matches = re.finditer(r'.{0,50}id=1344[0-9].{0,100}', content)
-          for i, m in enumerate(matches):
-              print(f"--- Match {i+1} ---")
-              print(m.group())
-              print()
-          EOF
 
       - name: Fetch RBI page
         run: |
-          curl -v "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx" \
+          set -e
+          echo "Starting fetch..."
+          
+          curl -L \
             -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" \
             -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
             -H "Accept-Language: en-US,en;q=0.5" \
-            -L \
+            -H "Connection: keep-alive" \
+            --max-time 30 \
             -o rbi_page.html \
-            -w "\nHTTP Status: %{http_code}\nSize: %{size_download} bytes\n"
+            -w "HTTP Status: %{http_code}\nDownload size: %{size_download} bytes\n" \
+            "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx"
           
-          echo "File exists: $(ls -la rbi_page.html 2>/dev/null || echo 'NO FILE')"
-          echo "First 500 chars:"
-          head -c 500 rbi_page.html || echo "Cannot read file"
+          echo "--- File check ---"
+          ls -la rbi_page.html
+          echo "--- First 1000 chars ---"
+          head -c 1000 rbi_page.html
+
+      - name: Debug link structure
+        run: |
+          set -e
+          echo "File size: $(wc -c < rbi_page.html) bytes"
+          echo "--- All lines containing 'id=' ---"
+          grep -i 'id=' rbi_page.html | head -20
 
       - name: Check for new directions
         id: check
         run: |
+          set -e
           MAX_ID=$(grep -oP '(?<=id=)\d+' rbi_page.html | sort -n | tail -1)
           PREV_ID=$(cat .github/rbi_last_id.txt 2>/dev/null || echo "0")
           echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
@@ -65,7 +63,12 @@ jobs:
 
           prev_id = int("${{ steps.check.outputs.prev_id }}")
 
-          # Match both href patterns RBI uses
+          # Print raw sample around any id= reference > prev_id for debugging
+          for m in re.finditer(r'.{0,80}id=(\d+).{0,80}', content):
+              if int(m.group(1)) > prev_id:
+                  print("SAMPLE:", m.group())
+                  break
+
           pattern = r'[Bb][Ss]_[Vv]iew[Mm]as[Dd]irections\.aspx\?id=(\d+)[^"]*"[^>]*>([^<]{10,})</a>'
           matches = re.findall(pattern, content)
 
@@ -99,7 +102,6 @@ jobs:
           import json, smtplib
           from email.mime.text import MIMEText
           from email.mime.multipart import MIMEMultipart
-          import os
 
           with open('new_directions.json') as f:
               items = json.load(f)
@@ -108,7 +110,18 @@ jobs:
           for item in items:
               lines.append(f"• {item['title']}\n  Link: {item['url']}")
 
-          body = f"""New RBI Master Direction(s) have been published.Total new: {len(items)}{"=" * 60}{chr(10).join(lines)}{"=" * 60}Source: https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx"""
+          body = f"""New RBI Master Direction(s) have been published.
+
+          Total new: {len(items)}
+
+          {"=" * 60}
+
+          {chr(10).join(lines)}
+
+          {"=" * 60}
+
+          Source: https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx
+          """
 
           gmail_user = "${{ secrets.GMAIL_USER }}"
           gmail_pass = "${{ secrets.GMAIL_APP_PASSWORD }}"
