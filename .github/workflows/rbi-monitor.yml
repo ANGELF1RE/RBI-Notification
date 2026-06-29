@@ -9,6 +9,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Debug - show link structure
+        run: |
+          python3 - <<'EOF'
+          import re
+
+          with open('rbi_page.html', 'r', encoding='utf-8', errors='ignore') as f:
+              content = f.read()
+
+          # Find ALL links containing 'id=' and print raw HTML around them
+          matches = re.finditer(r'.{0,50}id=1344[0-9].{0,100}', content)
+          for i, m in enumerate(matches):
+              print(f"--- Match {i+1} ---")
+              print(m.group())
+              print()
+          EOF
 
       - name: Fetch RBI page
         run: |
