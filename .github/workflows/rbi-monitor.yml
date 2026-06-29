@@ -1,0 +1,126 @@
+name: RBI Master Directions Monitor
+on:
+  schedule:
+    - cron: '0 3,12 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch RBI page
+        run: |
+          curl -s "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+            -o rbi_page.html
+          echo "Page fetched. Size: $(wc -c < rbi_page.html) bytes"
+
+      - name: Check for new directions
+        id: check
+        run: |
+          MAX_ID=$(grep -oP '(?<=id=)\d+' rbi_page.html | sort -n | tail -1)
+          PREV_ID=$(cat .github/rbi_last_id.txt 2>/dev/null || echo "0")
+          echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
+          echo "prev_id=$PREV_ID" >> $GITHUB_OUTPUT
+          echo "Current max ID: $MAX_ID | Previous ID: $PREV_ID"
+          if [ "$MAX_ID" -gt "$PREV_ID" ]; then
+            echo "new_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "new_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract new direction titles
+        if: steps.check.outputs.new_found == 'true'
+        run: |
+          python3 - <<'EOF'
+          import re, json
+
+          with open('rbi_page.html', 'r', encoding='utf-8', errors='ignore') as f:
+              content = f.read()
+
+          prev_id = int("${{ steps.check.outputs.prev_id }}")
+          pattern = r'href="[^"]*id=(\d+)"[^>]*>([^<]+)</a>'
+          matches = re.findall(pattern, content)
+
+          new_items = []
+          seen = set()
+          for id_str, title in matches:
+              if int(id_str) > prev_id and id_str not in seen:
+                  seen.add(id_str)
+                  new_items.append({
+                      'id': id_str,
+                      'title': title.strip(),
+                      'url': f'https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id={id_str}'
+                  })
+
+          new_items.sort(key=lambda x: int(x['id']), reverse=True)
+
+          with open('new_directions.json', 'w') as f:
+              json.dump(new_items, f, indent=2)
+
+          print(f"Found {len(new_items)} new directions")
+          for item in new_items:
+              print(f"  [{item['id']}] {item['title']}")
+          EOF
+
+      - name: Send email alert
+        if: steps.check.outputs.new_found == 'true'
+        run: |
+          python3 - <<'EOF'
+          import json, urllib.request
+
+          with open('new_directions.json') as f:
+              items = json.load(f)
+
+          lines = []
+          for item in items:
+              lines.append(f"• {item['title']}\n  Link: {item['url']}")
+
+          body = f"""New RBI Master Direction(s) have been published on the RBI website.
+
+          Total new: {len(items)}
+
+          {"=" * 60}
+
+          {chr(10).join(lines)}
+
+          {"=" * 60}
+
+          Source: https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx
+          """
+
+          payload = json.dumps({
+              "service_id": "${{ secrets.EMAILJS_SERVICE_ID }}",
+              "template_id": "${{ secrets.EMAILJS_TEMPLATE_ID }}",
+              "user_id": "${{ secrets.EMAILJS_PUBLIC_KEY }}",
+              "template_params": {
+                  "to_email": "${{ secrets.ALERT_EMAIL }}",
+                  "subject": f"RBI Alert: {len(items)} New Master Direction(s) Published",
+                  "message": body
+              }
+          }).encode()
+
+          req = urllib.request.Request(
+              "https://api.emailjs.com/api/v1.0/email/send",
+              data=payload,
+              headers={"Content-Type": "application/json", "Origin": "http://localhost"}
+          )
+          try:
+              resp = urllib.request.urlopen(req)
+              print(f"Email sent successfully. Status: {resp.status}")
+          except Exception as e:
+              print(f"Email failed: {e}")
+              raise
+          EOF
+
+      - name: Save new max ID
+        if: steps.check.outputs.new_found == 'true'
+        run: |
+          echo "${{ steps.check.outputs.max_id }}" > .github/rbi_last_id.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/rbi_last_id.txt
+          git commit -m "chore: update RBI last seen ID to ${{ steps.check.outputs.max_id }}"
+          git push
