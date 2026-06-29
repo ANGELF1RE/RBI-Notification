@@ -69,7 +69,10 @@ jobs:
         if: steps.check.outputs.new_found == 'true'
         run: |
           python3 - <<'EOF'
-          import json, urllib.request
+          import json, smtplib
+          from email.mime.text import MIMEText
+          from email.mime.multipart import MIMEMultipart
+          import os
 
           with open('new_directions.json') as f:
               items = json.load(f)
@@ -78,41 +81,22 @@ jobs:
           for item in items:
               lines.append(f"• {item['title']}\n  Link: {item['url']}")
 
-          body = f"""New RBI Master Direction(s) have been published on the RBI website.
+          body = f"""New RBI Master Direction(s) have been published.Total new: {len(items)}{"=" * 60}{chr(10).join(lines)}{"=" * 60}Source: https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx"""
 
-          Total new: {len(items)}
+          gmail_user = "${{ secrets.GMAIL_USER }}"
+          gmail_pass = "${{ secrets.GMAIL_APP_PASSWORD }}"
+          to_email   = "${{ secrets.ALERT_EMAIL }}"
 
-          {"=" * 60}
+          msg = MIMEMultipart()
+          msg['From']    = gmail_user
+          msg['To']      = to_email
+          msg['Subject'] = f"RBI Alert: {len(items)} New Master Direction(s) Published"
+          msg.attach(MIMEText(body, 'plain'))
 
-          {chr(10).join(lines)}
-
-          {"=" * 60}
-
-          Source: https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx
-          """
-
-          payload = json.dumps({
-              "service_id": "${{ secrets.EMAILJS_SERVICE_ID }}",
-              "template_id": "${{ secrets.EMAILJS_TEMPLATE_ID }}",
-              "user_id": "${{ secrets.EMAILJS_PUBLIC_KEY }}",
-              "template_params": {
-                  "to_email": "${{ secrets.ALERT_EMAIL }}",
-                  "subject": f"RBI Alert: {len(items)} New Master Direction(s) Published",
-                  "message": body
-              }
-          }).encode()
-
-          req = urllib.request.Request(
-              "https://api.emailjs.com/api/v1.0/email/send",
-              data=payload,
-              headers={"Content-Type": "application/json", "Origin": "http://localhost"}
-          )
-          try:
-              resp = urllib.request.urlopen(req)
-              print(f"Email sent successfully. Status: {resp.status}")
-          except Exception as e:
-              print(f"Email failed: {e}")
-              raise
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+              server.login(gmail_user, gmail_pass)
+              server.sendmail(gmail_user, to_email, msg.as_string())
+              print(f"Email sent successfully to {to_email}")
           EOF
 
       - name: Save new max ID
