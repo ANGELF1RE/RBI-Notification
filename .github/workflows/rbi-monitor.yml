@@ -180,7 +180,7 @@ jobs:
 
           gmail_user = "${{ secrets.GMAIL_USER }}"
           gmail_pass = "${{ secrets.GMAIL_APP_PASSWORD }}"
-          to_email   = "${{ secrets.ALERT_EMAIL }}"
+          to_email_list = [e.strip() for e in "${{ secrets.ALERT_EMAIL }}".split(",")]
 
           parts = []
           if notif_items: parts.append(f"{len(notif_items)} Notification(s)")
@@ -189,14 +189,14 @@ jobs:
 
           msg = MIMEMultipart()
           msg['From']    = gmail_user
-          msg['To']      = to_email
+          msg['To'] = ", ".join(to_email_list)
           msg['Subject'] = subject
           msg.attach(MIMEText(body, 'plain'))
 
           with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
               server.login(gmail_user, gmail_pass)
-              server.sendmail(gmail_user, to_email, msg.as_string())
-              print(f"Email sent: {subject}")
+              server.sendmail(gmail_user, to_email_list, msg.as_string())
+              print(f"Email sent to {len(to_email_list)} recipients: {subject}")
           EOF
 
       - name: Save new IDs and push
