@@ -142,7 +142,6 @@ jobs:
           import json, smtplib, textwrap
           from datetime import date
           from email.mime.text import MIMEText
-          from email.mime.image import MIMEImage
           from email.mime.multipart import MIMEMultipart
 
           notif_items = []
@@ -216,8 +215,9 @@ jobs:
           <html><body style="margin:0;padding:0;background:#eeeeee;font-family:Arial,Helvetica,sans-serif;">
           <div style="max-width:640px;margin:20px auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
           <div style="background:#111111;padding:28px 24px 22px 24px;text-align:center;">
-          <img src="cid:aumyaa_logo" alt="Aumyaa" style="height:44px;margin-bottom:14px;">
-          <h1 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;">Regulatory Updates</h1>
+          <h1 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;letter-spacing:.5px;">AUMYAA</h1>
+          <p style="color:#f7c600;margin:2px 0 14px 0;font-size:10px;letter-spacing:2px;text-transform:uppercase;">Consulting Services LLP</p>
+          <h2 style="color:#ffffff;margin:0;font-size:18px;font-weight:700;">Regulatory Updates</h2>
           <p style="color:#f7c600;margin:4px 0 0 0;font-size:12px;">{today}</p>
           </div>
           <div style="height:3px;background:#f7c600;"></div>
@@ -251,25 +251,12 @@ jobs:
           if md_items:    parts.append(f"{len(md_items)} Master Direction(s)")
           subject = "RBI Alert: " + " + ".join(parts) + " Published"
 
-          msg = MIMEMultipart('related')
+          msg = MIMEMultipart('alternative')
           msg['From']    = gmail_user
           msg['To']      = ", ".join(to_email_list)
           msg['Subject'] = subject
-
-          alt = MIMEMultipart('alternative')
-          alt.attach(MIMEText(plain_body, 'plain'))
-          alt.attach(MIMEText(html_body, 'html'))
-          msg.attach(alt)
-
-          logo_path = "assets/aumyaa-logo.jpeg"
-          try:
-              with open(logo_path, 'rb') as f:
-                  logo = MIMEImage(f.read())
-                  logo.add_header('Content-ID', '<aumyaa_logo>')
-                  logo.add_header('Content-Disposition', 'inline', filename='aumyaa-logo.jpeg')
-                  msg.attach(logo)
-          except FileNotFoundError:
-              print(f"WARNING: logo not found at {logo_path} - email will send without it")
+          msg.attach(MIMEText(plain_body, 'plain'))
+          msg.attach(MIMEText(html_body, 'html'))
 
           print(f"HTML body size: {len(html_body.encode('utf-8'))} bytes")
 
@@ -278,7 +265,6 @@ jobs:
               server.sendmail(gmail_user, to_email_list, msg.as_string())
               print(f"Email sent to {len(to_email_list)} recipients: {subject}")
           EOF
-
 
       - name: Save new IDs and push
         if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true'
