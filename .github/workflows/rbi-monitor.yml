@@ -297,12 +297,12 @@ jobs:
           alt.attach(MIMEText(html_body, 'html'))
           msg.attach(alt)
 
-          logo_path = "assets/aumyaa-logo.png"
+          logo_path = "assets/aumyaa-logo.jpeg"
           try:
               with open(logo_path, 'rb') as f:
                   logo = MIMEImage(f.read())
                   logo.add_header('Content-ID', '<aumyaa_logo>')
-                  logo.add_header('Content-Disposition', 'inline', filename='aumyaa-logo.png')
+                  logo.add_header('Content-Disposition', 'inline', filename='aumyaa-logo.jpeg')
                   msg.attach(logo)
           except FileNotFoundError:
               print(f"WARNING: logo not found at {logo_path} — email will send without it")
