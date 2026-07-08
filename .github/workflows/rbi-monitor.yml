@@ -135,7 +135,7 @@ jobs:
               print(f"  [{item['id']}] {item['title']}")
           EOF
 
-            - name: Send email alert
+      - name: Send email alert
         if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true'
         run: |
           python3 - <<'EOF'
