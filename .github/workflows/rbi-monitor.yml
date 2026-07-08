@@ -135,13 +135,14 @@ jobs:
               print(f"  [{item['id']}] {item['title']}")
           EOF
 
-      - name: Send email alert
+            - name: Send email alert
         if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true'
         run: |
           python3 - <<'EOF'
           import json, smtplib, os
           from datetime import date
           from email.mime.text import MIMEText
+          from email.mime.image import MIMEImage
           from email.mime.multipart import MIMEMultipart
 
           notif_items = []
@@ -170,18 +171,34 @@ jobs:
           if md_items:
               lines = [f"• {i['title']}\n  {i['url']}" for i in md_items]
               sections_plain.append(f"MASTER DIRECTIONS ({len(md_items)} new)\n{'='*60}\n" + "\n\n".join(lines))
-          plain_body = f"RBI has published {total} new item(s).\n\n" + "\n\n".join(sections_plain)
+          plain_body = (
+              "Hi team, Please find the RBI recent update\n\n"
+              f"RBI has published {total} new item(s).\n\n"
+              + "\n\n".join(sections_plain)
+              + "\n\n"
+              "------------------------------\n"
+              "GET IN TOUCH\n"
+              "------------------------------\n"
+              "Aumyaa Consulting Services LLP | Head Quarter: Noida\n"
+              "2414, 4th Floor, Express Trade Tower 2 B36, Sector 132, Noida, Uttar Pradesh — 201301\n"
+              "Services: PAN India\n\n"
+              "Yukti Arora: 9818248133  yukti.arora@aumyaa.com\n"
+              "Ayushi Aggarwal: 9582604587  ayushi.aggarwal@aumyaa.com\n"
+              "www.aumyaa.com\n\n"
+              "Follow us on LinkedIn & YouTube for updates on NBFC regulatory compliance.\n\n"
+              "Warm regards,\nTeam Aumyaa"
+          )
 
           # ---- html body ----
           def rows_html(items, row_type):
               rows = ""
               for idx, i in enumerate(items):
-                  bg = "#1f2430" if idx % 2 == 0 else "#262c3a"
+                  bg = "#ffffff" if idx % 2 == 0 else "#f7f7f7"
                   rows += f"""
                   <tr style="background:{bg};">
-                    <td style="padding:12px 16px; color:#e8e8e8; font-size:14px; border-bottom:1px solid #333;">{row_type}</td>
-                    <td style="padding:12px 16px; border-bottom:1px solid #333;">
-                      <a href="{i['url']}" style="color:#8ab4f8; text-decoration:underline; font-size:14px;">{i['title']}</a>
+                    <td style="padding:12px 16px; color:#111111; font-size:14px; border-bottom:1px solid #e6e6e6; font-weight:bold;">{row_type}</td>
+                    <td style="padding:12px 16px; border-bottom:1px solid #e6e6e6;">
+                      <a href="{i['url']}" style="color:#111111; text-decoration:underline; font-size:14px;">{i['title']}</a>
                     </td>
                   </tr>"""
               return rows
@@ -189,32 +206,72 @@ jobs:
           section_blocks = ""
           if notif_items:
               section_blocks += f"""
-              <tr><td colspan="2" style="background:#11141a; color:#ffffff; font-weight:bold; font-size:15px; padding:10px 16px;">Notifications ({len(notif_items)})</td></tr>
+              <tr><td colspan="2" style="background:#000000; color:#f7c600; font-weight:bold; font-size:15px; padding:10px 16px;">Notifications ({len(notif_items)})</td></tr>
               {rows_html(notif_items, "Notification")}"""
           if md_items:
               section_blocks += f"""
-              <tr><td colspan="2" style="background:#11141a; color:#ffffff; font-weight:bold; font-size:15px; padding:10px 16px;">Master Directions ({len(md_items)})</td></tr>
+              <tr><td colspan="2" style="background:#000000; color:#f7c600; font-weight:bold; font-size:15px; padding:10px 16px;">Master Directions ({len(md_items)})</td></tr>
               {rows_html(md_items, "Master Direction")}"""
 
           html_body = f"""\
           <html>
-          <body style="margin:0; padding:0; background:#15181f; font-family:Arial, Helvetica, sans-serif;">
-            <div style="max-width:700px; margin:0 auto; background:#1a1d26; padding:24px;">
-              <h2 style="color:#f2f2f2; margin:0 0 4px 0;">Regulatory Updates</h2>
-              <p style="color:#9aa0ab; margin:0 0 16px 0; font-style:italic;">(Dated {today})</p>
-              <hr style="border:none; border-top:2px solid #e6a23c; margin:0 0 20px 0;">
-              <p style="color:#e8e8e8; margin:0 0 4px 0;">RBI has published <b>{total}</b> new item(s).</p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin-top:12px;">
-                <tr>
-                  <th style="background:#8ab4f8; color:#11141a; text-align:left; padding:10px 16px; font-size:14px;">Type</th>
-                  <th style="background:#8ab4f8; color:#11141a; text-align:left; padding:10px 16px; font-size:14px;">Update</th>
-                </tr>
-                {section_blocks}
-              </table>
-              <p style="color:#6b7280; font-size:12px; margin-top:24px;">
-                Notifications: <a href="https://www.rbi.org.in/scripts/NotificationUser.aspx" style="color:#8ab4f8;">source page</a><br>
-                Master Directions: <a href="https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx" style="color:#8ab4f8;">source page</a>
-              </p>
+          <body style="margin:0; padding:0; background:#ffffff; font-family:Arial, Helvetica, sans-serif;">
+            <div style="max-width:700px; margin:0 auto; background:#ffffff; border:1px solid #eeeeee;">
+
+              <!-- Header -->
+              <div style="background:#000000; padding:24px; text-align:center;">
+                <img src="cid:aumyaa_logo" alt="Aumyaa" style="height:48px; margin-bottom:12px;">
+                <h2 style="color:#ffffff; margin:0 0 4px 0;">Regulatory Updates</h2>
+                <p style="color:#f7c600; margin:0; font-style:italic; font-size:13px;">(Dated {today})</p>
+              </div>
+              <div style="height:4px; background:#f7c600;"></div>
+
+              <!-- Body -->
+              <div style="padding:24px;">
+                <p style="color:#111111; font-size:15px; margin:0 0 4px 0;">Hi team,</p>
+                <p style="color:#111111; font-size:15px; margin:0 0 16px 0;">Please find the RBI recent update.</p>
+                <p style="color:#111111; margin:0 0 4px 0;">RBI has published <b>{total}</b> new item(s).</p>
+
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin-top:12px;">
+                  <tr>
+                    <th style="background:#f7c600; color:#111111; text-align:left; padding:10px 16px; font-size:14px;">Type</th>
+                    <th style="background:#f7c600; color:#111111; text-align:left; padding:10px 16px; font-size:14px;">Update</th>
+                  </tr>
+                  {section_blocks}
+                </table>
+              </div>
+
+              <!-- Footer -->
+              <div style="background:#000000; padding:24px;">
+                <p style="color:#f7c600; text-align:center; letter-spacing:2px; font-size:12px; margin:0 0 16px 0;">
+                  ━━━━━━━━━━━━━━━━━━━━━━━━ GET IN TOUCH ━━━━━━━━━━━━━━━━━━━━━━━━
+                </p>
+                <p style="color:#ffffff; font-size:13px; margin:0 0 4px 0;">
+                  <b>Aumyaa Consulting Services LLP</b> | Head Quarter: Noida
+                </p>
+                <p style="color:#cccccc; font-size:12px; margin:0 0 12px 0;">
+                  2414, 4th Floor, Express Trade Tower 2 B36, Sector 132, Noida, Uttar Pradesh — 201301<br>
+                  Services: PAN India
+                </p>
+                <p style="color:#ffffff; font-size:12px; margin:0 0 4px 0;">
+                  Yukti Arora: 9818248133 &nbsp;
+                  <a href="mailto:yukti.arora@aumyaa.com" style="color:#f7c600;">yukti.arora@aumyaa.com</a>
+                </p>
+                <p style="color:#ffffff; font-size:12px; margin:0 0 12px 0;">
+                  Ayushi Aggarwal: 9582604587 &nbsp;
+                  <a href="mailto:ayushi.aggarwal@aumyaa.com" style="color:#f7c600;">ayushi.aggarwal@aumyaa.com</a>
+                </p>
+                <p style="margin:0 0 12px 0;">
+                  <a href="https://www.aumyaa.com" style="color:#f7c600; font-size:12px;">www.aumyaa.com</a>
+                </p>
+                <p style="color:#999999; font-size:11px; margin:0 0 16px 0;">
+                  Follow us on LinkedIn &amp; YouTube for updates on NBFC regulatory compliance.
+                </p>
+                <p style="color:#ffffff; font-size:13px; margin:0;">
+                  Warm regards,<br>Team Aumyaa
+                </p>
+              </div>
+
             </div>
           </body>
           </html>
@@ -229,12 +286,26 @@ jobs:
           if md_items:    parts.append(f"{len(md_items)} Master Direction(s)")
           subject = "RBI Alert: " + " + ".join(parts) + " Published"
 
-          msg = MIMEMultipart('alternative')
+          # 'related' wrapper carries the inline logo alongside the alternative (plain/html) body
+          msg = MIMEMultipart('related')
           msg['From']    = gmail_user
           msg['To']      = ", ".join(to_email_list)
           msg['Subject'] = subject
-          msg.attach(MIMEText(plain_body, 'plain'))
-          msg.attach(MIMEText(html_body, 'html'))
+
+          alt = MIMEMultipart('alternative')
+          alt.attach(MIMEText(plain_body, 'plain'))
+          alt.attach(MIMEText(html_body, 'html'))
+          msg.attach(alt)
+
+          logo_path = "assets/aumyaa-logo.png"
+          try:
+              with open(logo_path, 'rb') as f:
+                  logo = MIMEImage(f.read())
+                  logo.add_header('Content-ID', '<aumyaa_logo>')
+                  logo.add_header('Content-Disposition', 'inline', filename='aumyaa-logo.png')
+                  msg.attach(logo)
+          except FileNotFoundError:
+              print(f"WARNING: logo not found at {logo_path} — email will send without it")
 
           with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
               server.login(gmail_user, gmail_pass)
