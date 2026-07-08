@@ -140,6 +140,7 @@ jobs:
         run: |
           python3 - <<'EOF'
           import json, smtplib, os
+          from datetime import date
           from email.mime.text import MIMEText
           from email.mime.multipart import MIMEMultipart
 
@@ -158,24 +159,65 @@ jobs:
           except FileNotFoundError:
               pass
 
-          sections = []
+          total = len(notif_items) + len(md_items)
+          today = date.today().strftime('%d-%b-%Y')
 
+          # ---- plain text fallback ----
+          sections_plain = []
           if notif_items:
               lines = [f"• {i['title']}\n  {i['url']}" for i in notif_items]
-              sections.append(f"NOTIFICATIONS ({len(notif_items)} new)\n{'='*60}\n" + "\n\n".join(lines))
-
+              sections_plain.append(f"NOTIFICATIONS ({len(notif_items)} new)\n{'='*60}\n" + "\n\n".join(lines))
           if md_items:
               lines = [f"• {i['title']}\n  {i['url']}" for i in md_items]
-              sections.append(f"MASTER DIRECTIONS ({len(md_items)} new)\n{'='*60}\n" + "\n\n".join(lines))
+              sections_plain.append(f"MASTER DIRECTIONS ({len(md_items)} new)\n{'='*60}\n" + "\n\n".join(lines))
+          plain_body = f"RBI has published {total} new item(s).\n\n" + "\n\n".join(sections_plain)
 
-          total = len(notif_items) + len(md_items)
-          body = f"""RBI has published {total} new item(s).
+          # ---- html body ----
+          def rows_html(items, row_type):
+              rows = ""
+              for idx, i in enumerate(items):
+                  bg = "#1f2430" if idx % 2 == 0 else "#262c3a"
+                  rows += f"""
+                  <tr style="background:{bg};">
+                    <td style="padding:12px 16px; color:#e8e8e8; font-size:14px; border-bottom:1px solid #333;">{row_type}</td>
+                    <td style="padding:12px 16px; border-bottom:1px solid #333;">
+                      <a href="{i['url']}" style="color:#8ab4f8; text-decoration:underline; font-size:14px;">{i['title']}</a>
+                    </td>
+                  </tr>"""
+              return rows
 
-          {chr(10).join(sections)}
+          section_blocks = ""
+          if notif_items:
+              section_blocks += f"""
+              <tr><td colspan="2" style="background:#11141a; color:#ffffff; font-weight:bold; font-size:15px; padding:10px 16px;">Notifications ({len(notif_items)})</td></tr>
+              {rows_html(notif_items, "Notification")}"""
+          if md_items:
+              section_blocks += f"""
+              <tr><td colspan="2" style="background:#11141a; color:#ffffff; font-weight:bold; font-size:15px; padding:10px 16px;">Master Directions ({len(md_items)})</td></tr>
+              {rows_html(md_items, "Master Direction")}"""
 
-          {'='*60}
-          Notifications page: https://www.rbi.org.in/scripts/NotificationUser.aspx
-          Master Directions page: https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx
+          html_body = f"""\
+          <html>
+          <body style="margin:0; padding:0; background:#15181f; font-family:Arial, Helvetica, sans-serif;">
+            <div style="max-width:700px; margin:0 auto; background:#1a1d26; padding:24px;">
+              <h2 style="color:#f2f2f2; margin:0 0 4px 0;">Regulatory Updates</h2>
+              <p style="color:#9aa0ab; margin:0 0 16px 0; font-style:italic;">(Dated {today})</p>
+              <hr style="border:none; border-top:2px solid #e6a23c; margin:0 0 20px 0;">
+              <p style="color:#e8e8e8; margin:0 0 4px 0;">RBI has published <b>{total}</b> new item(s).</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin-top:12px;">
+                <tr>
+                  <th style="background:#8ab4f8; color:#11141a; text-align:left; padding:10px 16px; font-size:14px;">Type</th>
+                  <th style="background:#8ab4f8; color:#11141a; text-align:left; padding:10px 16px; font-size:14px;">Update</th>
+                </tr>
+                {section_blocks}
+              </table>
+              <p style="color:#6b7280; font-size:12px; margin-top:24px;">
+                Notifications: <a href="https://www.rbi.org.in/scripts/NotificationUser.aspx" style="color:#8ab4f8;">source page</a><br>
+                Master Directions: <a href="https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx" style="color:#8ab4f8;">source page</a>
+              </p>
+            </div>
+          </body>
+          </html>
           """
 
           gmail_user = "${{ secrets.GMAIL_USER }}"
@@ -187,11 +229,12 @@ jobs:
           if md_items:    parts.append(f"{len(md_items)} Master Direction(s)")
           subject = "RBI Alert: " + " + ".join(parts) + " Published"
 
-          msg = MIMEMultipart()
+          msg = MIMEMultipart('alternative')
           msg['From']    = gmail_user
-          msg['To'] = ", ".join(to_email_list)
+          msg['To']      = ", ".join(to_email_list)
           msg['Subject'] = subject
-          msg.attach(MIMEText(body, 'plain'))
+          msg.attach(MIMEText(plain_body, 'plain'))
+          msg.attach(MIMEText(html_body, 'html'))
 
           with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
               server.login(gmail_user, gmail_pass)
