@@ -30,9 +30,16 @@ jobs:
             "https://www.cert-in.org.in/s2cMainServlet?pageid=GUIDLNVIEW01"
           echo "CERT-In Guidelines: $(wc -c < certin_guidelines.html) bytes"
 
-      - name: DEBUG - show CERT-In raw markup around refcode
+      - name: DEBUG - inspect CERT-In raw structure
         run: |
-          grep -o '.\{80\}refcode=CISG[^"]*.\{200\}' certin_guidelines.html | head -5
+          echo "--- Does CISG appear at all? ---"
+          grep -c 'CISG' certin_guidelines.html || echo "0 occurrences"
+          echo "--- First 3 raw CISG contexts ---"
+          grep -o '.\{100\}CISG.\{100\}' certin_guidelines.html | head -3
+          echo "--- All href patterns containing s2cMainServlet ---"
+          grep -o 'href="[^"]*s2cMainServlet[^"]*"' certin_guidelines.html | sort -u | head -10
+          echo "--- Page title / body sample (first 1500 chars after <body) ---"
+          sed -n '/<body/,+0p' certin_guidelines.html | head -c 1500
 
       # ---------------- RBI Notifications ----------------
       - name: Check RBI Notifications for new entries
