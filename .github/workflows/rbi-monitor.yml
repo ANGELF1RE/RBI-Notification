@@ -1,4 +1,4 @@
-name: RBI Monitor - Notifications & Master Directions
+name: RBI/SEBI/CERT-In Monitor - Notifications & Guidelines
 on:
   schedule:
     - cron: '0 3,12 * * 1-5'
@@ -10,66 +10,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch both RBI pages
+      - name: Fetch all source pages
         run: |
-          curl -s -L \
-            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            -o notifications.html \
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+          curl -s -L -H "User-Agent: $UA" -o notifications.html \
             "https://www.rbi.org.in/scripts/NotificationUser.aspx"
-          echo "Notifications page: $(wc -c < notifications.html) bytes"
+          echo "RBI Notifications: $(wc -c < notifications.html) bytes"
 
-          curl -s -L \
-            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            -o master_directions.html \
+          curl -s -L -H "User-Agent: $UA" -o master_directions.html \
             "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx"
-          echo "Master Directions page: $(wc -c < master_directions.html) bytes"
+          echo "RBI Master Directions: $(wc -c < master_directions.html) bytes"
 
-      - name: Check Notifications for new entries
+          curl -s -L -H "User-Agent: $UA" -o sebi_pr.html \
+            "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=23&smid=0"
+          echo "SEBI Press Releases: $(wc -c < sebi_pr.html) bytes"
+
+          curl -s -L -H "User-Agent: $UA" -o certin_guidelines.html \
+            "https://www.cert-in.org.in/s2cMainServlet?pageid=GUIDLNVIEW01"
+          echo "CERT-In Guidelines: $(wc -c < certin_guidelines.html) bytes"
+
+      # ---------------- RBI Notifications ----------------
+      - name: Check RBI Notifications for new entries
         id: check_notif
         run: |
           MAX_ID=$(grep -oP '(?<=NotificationUser\.aspx\?Id=)\d+' notifications.html | sort -n | tail -1)
           PREV_ID=$(cat .github/rbi_notif_last_id.txt 2>/dev/null || echo "0")
           echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
           echo "prev_id=$PREV_ID" >> $GITHUB_OUTPUT
-          echo "Notifications - Current max: $MAX_ID | Previous: $PREV_ID"
-          if [ "$MAX_ID" -gt "$PREV_ID" ]; then
+          if [ -n "$MAX_ID" ] && [ "$MAX_ID" -gt "$PREV_ID" ]; then
             echo "new_found=true" >> $GITHUB_OUTPUT
           else
             echo "new_found=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check Master Directions for new entries
-        id: check_md
-        run: |
-          MAX_ID=$(grep -oP '(?<=id=)\d+' master_directions.html | sort -n | tail -1)
-          PREV_ID=$(cat .github/rbi_md_last_id.txt 2>/dev/null || echo "0")
-          echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
-          echo "prev_id=$PREV_ID" >> $GITHUB_OUTPUT
-          echo "Master Directions - Current max: $MAX_ID | Previous: $PREV_ID"
-          if [ "$MAX_ID" -gt "$PREV_ID" ]; then
-            echo "new_found=true" >> $GITHUB_OUTPUT
-          else
-            echo "new_found=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Extract new Notifications
+      - name: Extract new RBI Notifications
         if: steps.check_notif.outputs.new_found == 'true'
         run: |
           python3 - <<'EOF'
           import re, json
-
           with open('notifications.html', 'r', encoding='utf-8', errors='ignore') as f:
               content = f.read()
-
           prev_id = int("${{ steps.check_notif.outputs.prev_id }}")
-
-          # Plain HTML pattern - links render directly in this page
           pattern = r'NotificationUser\.aspx\?Id=(\d+)&(?:amp;)?Mode=0[^>]*>([^<]+)</a>'
           matches = re.findall(pattern, content)
           print(f"Total notification matches: {len(matches)}")
-
-          new_items = []
-          seen = set()
+          new_items, seen = [], set()
           for id_str, title in matches:
               title = title.strip()
               if int(id_str) > prev_id and id_str not in seen and len(title) > 10:
@@ -79,28 +65,36 @@ jobs:
                       'title': title,
                       'url': f'https://www.rbi.org.in/scripts/NotificationUser.aspx?Id={id_str}&Mode=0'
                   })
-
           new_items.sort(key=lambda x: int(x['id']), reverse=True)
-
           with open('new_notifications.json', 'w') as f:
               json.dump(new_items, f, indent=2)
-
           print(f"New notifications found: {len(new_items)}")
           for item in new_items:
               print(f"  [{item['id']}] {item['title']}")
           EOF
 
-      - name: Extract new Master Directions
+      # ---------------- RBI Master Directions ----------------
+      - name: Check RBI Master Directions for new entries
+        id: check_md
+        run: |
+          MAX_ID=$(grep -oP '(?<=id=)\d+' master_directions.html | sort -n | tail -1)
+          PREV_ID=$(cat .github/rbi_md_last_id.txt 2>/dev/null || echo "0")
+          echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
+          echo "prev_id=$PREV_ID" >> $GITHUB_OUTPUT
+          if [ -n "$MAX_ID" ] && [ "$MAX_ID" -gt "$PREV_ID" ]; then
+            echo "new_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "new_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract new RBI Master Directions
         if: steps.check_md.outputs.new_found == 'true'
         run: |
           python3 - <<'EOF'
           import re, json, base64
-
           with open('master_directions.html', 'r', encoding='utf-8', errors='ignore') as f:
               content = f.read()
-
           prev_id = int("${{ steps.check_md.outputs.prev_id }}")
-
           viewstate_match = re.search(r'__VIEWSTATE[^>]*value="([^"]+)"', content)
           decoded_text = ""
           if viewstate_match:
@@ -108,13 +102,10 @@ jobs:
                   decoded_text = base64.b64decode(viewstate_match.group(1)).decode('utf-8', errors='ignore')
               except Exception as e:
                   print(f"Decode error: {e}")
-
           pattern = r'href=BS_ViewMasDirections\.aspx\?id=(\d+)>\s*([^<]+)'
           matches = re.findall(pattern, decoded_text)
           print(f"Total master direction matches: {len(matches)}")
-
-          new_items = []
-          seen = set()
+          new_items, seen = [], set()
           for id_str, title in matches:
               title = title.strip()
               if int(id_str) > prev_id and id_str not in seen and len(title) > 10:
@@ -124,19 +115,102 @@ jobs:
                       'title': title,
                       'url': f'https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id={id_str}'
                   })
-
           new_items.sort(key=lambda x: int(x['id']), reverse=True)
-
           with open('new_master_directions.json', 'w') as f:
               json.dump(new_items, f, indent=2)
-
           print(f"New master directions found: {len(new_items)}")
           for item in new_items:
               print(f"  [{item['id']}] {item['title']}")
           EOF
 
+      # ---------------- SEBI Press Releases ----------------
+      - name: Check SEBI Press Releases for new entries
+        id: check_sebi
+        run: |
+          MAX_ID=$(grep -oP '(?<=_)\d+(?=\.html)' sebi_pr.html | sort -n | tail -1)
+          PREV_ID=$(cat .github/sebi_pr_last_id.txt 2>/dev/null || echo "0")
+          echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
+          echo "prev_id=$PREV_ID" >> $GITHUB_OUTPUT
+          if [ -n "$MAX_ID" ] && [ "$MAX_ID" -gt "$PREV_ID" ]; then
+            echo "new_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "new_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract new SEBI Press Releases
+        if: steps.check_sebi.outputs.new_found == 'true'
+        run: |
+          python3 - <<'EOF'
+          import re, json
+          with open('sebi_pr.html', 'r', encoding='utf-8', errors='ignore') as f:
+              content = f.read()
+          prev_id = int("${{ steps.check_sebi.outputs.prev_id }}")
+          pattern = r'href="(https://www\.sebi\.gov\.in/media-and-notifications/press-releases/[^"]+_(\d+)\.html)"[^>]*>([^<]+)</a>'
+          matches = re.findall(pattern, content)
+          print(f"Total SEBI PR matches: {len(matches)}")
+          new_items, seen = [], set()
+          for url, id_str, title in matches:
+              title = title.strip()
+              if int(id_str) > prev_id and id_str not in seen and len(title) > 10:
+                  seen.add(id_str)
+                  new_items.append({'id': id_str, 'title': title, 'url': url})
+          new_items.sort(key=lambda x: int(x['id']), reverse=True)
+          with open('new_sebi_pr.json', 'w') as f:
+              json.dump(new_items, f, indent=2)
+          print(f"New SEBI PR items found: {len(new_items)}")
+          for item in new_items:
+              print(f"  [{item['id']}] {item['title']}")
+          EOF
+
+      # ---------------- CERT-In Guidelines ----------------
+      - name: Check CERT-In Guidelines for new entries
+        id: check_certin
+        run: |
+          MAX_KEY=$(grep -oP 'CISG-\d{4}-\d+' certin_guidelines.html | sort -u | awk -F'-' '{printf "%d%02d\n",$2,$3}' | sort -n | tail -1)
+          PREV_KEY=$(cat .github/certin_guidelines_last_key.txt 2>/dev/null || echo "0")
+          echo "max_key=$MAX_KEY" >> $GITHUB_OUTPUT
+          echo "prev_key=$PREV_KEY" >> $GITHUB_OUTPUT
+          if [ -n "$MAX_KEY" ] && [ "$MAX_KEY" -gt "$PREV_KEY" ]; then
+            echo "new_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "new_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract new CERT-In Guidelines
+        if: steps.check_certin.outputs.new_found == 'true'
+        run: |
+          python3 - <<'EOF'
+          import re, json
+          with open('certin_guidelines.html', 'r', encoding='utf-8', errors='ignore') as f:
+              content = f.read()
+          prev_key = int("${{ steps.check_certin.outputs.prev_key }}")
+          # UNVERIFIED against raw HTML — run workflow_dispatch once, check the printed
+          # match count below, and adjust this pattern if it's 0 while max_key > 0.
+          pattern = r'refcode=(CISG-(\d{4})-(\d+))"[^>]*>.*?</a>\s*(?:</td>\s*<td[^>]*>)?\(?([^()<]{10,150})\)?'
+          matches = re.findall(pattern, content, re.DOTALL)
+          print(f"Total CERT-In matches: {len(matches)}")
+          new_items, seen = [], set()
+          for refcode, yr, seq, title in matches:
+              key = int(yr) * 100 + int(seq)
+              if key > prev_key and refcode not in seen:
+                  seen.add(refcode)
+                  new_items.append({
+                      'id': refcode,
+                      'key': key,
+                      'title': title.strip(),
+                      'url': f'https://www.cert-in.org.in/s2cMainServlet?pageid=GUIDLNVIEW02&refcode={refcode}'
+                  })
+          new_items.sort(key=lambda x: x['key'], reverse=True)
+          with open('new_certin_guidelines.json', 'w') as f:
+              json.dump(new_items, f, indent=2)
+          print(f"New CERT-In guidelines found: {len(new_items)}")
+          for item in new_items:
+              print(f"  [{item['id']}] {item['title']}")
+          EOF
+
+      # ---------------- Email ----------------
       - name: Send email alert
-        if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true'
+        if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true' || steps.check_sebi.outputs.new_found == 'true' || steps.check_certin.outputs.new_found == 'true'
         run: |
           python3 - <<'EOF'
           import json, smtplib, textwrap
@@ -144,37 +218,40 @@ jobs:
           from email.mime.text import MIMEText
           from email.mime.multipart import MIMEMultipart
 
-          notif_items = []
-          md_items = []
+          def load(path):
+              try:
+                  with open(path) as f:
+                      return json.load(f)
+              except FileNotFoundError:
+                  return []
 
-          try:
-              with open('new_notifications.json') as f:
-                  notif_items = json.load(f)
-          except FileNotFoundError:
-              pass
+          notif_items = load('new_notifications.json')
+          md_items    = load('new_master_directions.json')
+          sebi_items  = load('new_sebi_pr.json')
+          certin_items = load('new_certin_guidelines.json')
 
-          try:
-              with open('new_master_directions.json') as f:
-                  md_items = json.load(f)
-          except FileNotFoundError:
-              pass
-
-          total = len(notif_items) + len(md_items)
+          total = len(notif_items) + len(md_items) + len(sebi_items) + len(certin_items)
           today = date.today().strftime('%d-%b-%Y')
 
           # ---- plain text fallback ----
           sections_plain = []
           if notif_items:
               lines = [f"- {i['title']}\n  {i['url']}" for i in notif_items]
-              sections_plain.append(f"NOTIFICATIONS ({len(notif_items)} new)\n" + "\n\n".join(lines))
+              sections_plain.append(f"RBI NOTIFICATIONS ({len(notif_items)} new)\n" + "\n\n".join(lines))
           if md_items:
               lines = [f"- {i['title']}\n  {i['url']}" for i in md_items]
-              sections_plain.append(f"MASTER DIRECTIONS ({len(md_items)} new)\n" + "\n\n".join(lines))
+              sections_plain.append(f"RBI MASTER DIRECTIONS ({len(md_items)} new)\n" + "\n\n".join(lines))
+          if sebi_items:
+              lines = [f"- {i['title']}\n  {i['url']}" for i in sebi_items]
+              sections_plain.append(f"SEBI PRESS RELEASES ({len(sebi_items)} new)\n" + "\n\n".join(lines))
+          if certin_items:
+              lines = [f"- {i['title']}\n  {i['url']}" for i in certin_items]
+              sections_plain.append(f"CERT-IN GUIDELINES ({len(certin_items)} new)\n" + "\n\n".join(lines))
 
           plain_body = textwrap.dedent(f"""\
-          Hi team, Please find the RBI recent update
+          Hi team, Please find the recent regulatory update
 
-          RBI has published {total} new item(s).
+          {total} new item(s) published across RBI, SEBI, and CERT-In.
 
           {chr(10).join(sections_plain)}
 
@@ -195,7 +272,7 @@ jobs:
           Team Aumyaa
           """)
 
-          # ---- html: card-style list instead of a rigid table (avoids Gmail's repeated-row clipping) ----
+          # ---- html: card-style list ----
           def card(item, tag):
               return textwrap.dedent(f"""\
               <div style="padding:14px 18px;border-left:3px solid #f7c600;background:#fafafa;margin-bottom:10px;border-radius:0 6px 6px 0;">
@@ -205,11 +282,17 @@ jobs:
 
           cards = ""
           if notif_items:
-              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">Notifications</p>'
-              cards += "".join(card(i, "NOTIFICATION") for i in notif_items)
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">RBI Notifications</p>'
+              cards += "".join(card(i, "RBI NOTIFICATION") for i in notif_items)
           if md_items:
-              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">Master Directions</p>'
-              cards += "".join(card(i, "MASTER DIRECTION") for i in md_items)
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">RBI Master Directions</p>'
+              cards += "".join(card(i, "RBI MASTER DIRECTION") for i in md_items)
+          if sebi_items:
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">SEBI Press Releases</p>'
+              cards += "".join(card(i, "SEBI PRESS RELEASE") for i in sebi_items)
+          if certin_items:
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">CERT-In Guidelines</p>'
+              cards += "".join(card(i, "CERT-IN GUIDELINE") for i in certin_items)
 
           html_body = textwrap.dedent(f"""\
           <html><body style="margin:0;padding:0;background:#eeeeee;font-family:Arial,Helvetica,sans-serif;">
@@ -223,7 +306,7 @@ jobs:
           <div style="height:3px;background:#f7c600;"></div>
           <div style="padding:24px 24px 8px 24px;">
           <p style="color:#111111;font-size:15px;margin:0 0 2px 0;">Hi team,</p>
-          <p style="color:#555555;font-size:14px;margin:0 0 4px 0;">Please find the RBI recent update — <b style="color:#111111;">{total} new item(s)</b> published.</p>
+          <p style="color:#555555;font-size:14px;margin:0 0 4px 0;">Please find the recent regulatory update — <b style="color:#111111;">{total} new item(s)</b> published.</p>
           {cards}
           </div>
           <div style="background:#111111;padding:26px 24px;margin-top:10px;">
@@ -247,9 +330,11 @@ jobs:
           to_email_list = [e.strip() for e in "${{ secrets.ALERT_EMAIL }}".split(",")]
 
           parts = []
-          if notif_items: parts.append(f"{len(notif_items)} Notification(s)")
-          if md_items:    parts.append(f"{len(md_items)} Master Direction(s)")
-          subject = "RBI Alert: " + " + ".join(parts) + " Published"
+          if notif_items:  parts.append(f"{len(notif_items)} RBI Notification(s)")
+          if md_items:     parts.append(f"{len(md_items)} RBI Master Direction(s)")
+          if sebi_items:   parts.append(f"{len(sebi_items)} SEBI PR(s)")
+          if certin_items: parts.append(f"{len(certin_items)} CERT-In Guideline(s)")
+          subject = "Regulatory Alert: " + " + ".join(parts) + " Published"
 
           msg = MIMEMultipart('alternative')
           msg['From']    = gmail_user
@@ -266,8 +351,9 @@ jobs:
               print(f"Email sent to {len(to_email_list)} recipients: {subject}")
           EOF
 
+      # ---------------- Save state ----------------
       - name: Save new IDs and push
-        if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true'
+        if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true' || steps.check_sebi.outputs.new_found == 'true' || steps.check_certin.outputs.new_found == 'true'
         run: |
           if [ "${{ steps.check_notif.outputs.new_found }}" == "true" ]; then
             echo "${{ steps.check_notif.outputs.max_id }}" > .github/rbi_notif_last_id.txt
@@ -275,8 +361,14 @@ jobs:
           if [ "${{ steps.check_md.outputs.new_found }}" == "true" ]; then
             echo "${{ steps.check_md.outputs.max_id }}" > .github/rbi_md_last_id.txt
           fi
+          if [ "${{ steps.check_sebi.outputs.new_found }}" == "true" ]; then
+            echo "${{ steps.check_sebi.outputs.max_id }}" > .github/sebi_pr_last_id.txt
+          fi
+          if [ "${{ steps.check_certin.outputs.new_found }}" == "true" ]; then
+            echo "${{ steps.check_certin.outputs.max_key }}" > .github/certin_guidelines_last_key.txt
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/rbi_notif_last_id.txt .github/rbi_md_last_id.txt
-          git commit -m "chore: update RBI last seen IDs (notif=${{ steps.check_notif.outputs.max_id }}, md=${{ steps.check_md.outputs.max_id }})"
+          git add .github/rbi_notif_last_id.txt .github/rbi_md_last_id.txt .github/sebi_pr_last_id.txt .github/certin_guidelines_last_key.txt
+          git commit -m "chore: update regulatory monitor last-seen IDs" || echo "Nothing to commit"
           git push
