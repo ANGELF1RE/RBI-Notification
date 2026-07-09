@@ -14,10 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch all source pages
+      - name: Fetch RBI and CERT-In pages
         run: |
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
           curl -s -L -H "User-Agent: $UA" -o notifications.html \
             "https://www.rbi.org.in/scripts/NotificationUser.aspx"
           echo "RBI Notifications: $(wc -c < notifications.html) bytes"
@@ -26,26 +25,24 @@ jobs:
             "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx"
           echo "RBI Master Directions: $(wc -c < master_directions.html) bytes"
 
-          curl -s -L -H "User-Agent: $UA" -o sebi_pr.html \
-            "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=23&smid=0"
-          echo "SEBI Press Releases: $(wc -c < sebi_pr.html) bytes"
-
           curl -s -L -H "User-Agent: $UA" -o certin_guidelines.html \
             "https://www.cert-in.org.in/s2cMainServlet?pageid=GUIDLNVIEW01"
           echo "CERT-In Guidelines: $(wc -c < certin_guidelines.html) bytes"
 
-      - name: DEBUG - inspect CERT-In raw structure v2
+      - name: Fetch SEBI Media & Notifications pages
         run: |
-          echo "--- All CISG occurrences (loose match, no line-width limit) ---"
-          grep -o 'CISG[-A-Za-z0-9]*' certin_guidelines.html | sort -u | head -20
-          echo "--- Lines containing CISG (line numbers) ---"
-          grep -n 'CISG' certin_guidelines.html | head -5
-          echo "--- ALL s2cMainServlet hrefs (uncapped) ---"
-          grep -o 'href="[^"]*s2cMainServlet[^"]*"' certin_guidelines.html | sort -u
-          echo "--- ALL hrefs containing GUIDLN ---"
-          grep -o 'href="[^"]*GUIDLN[^"]*"' certin_guidelines.html | sort -u
-          echo "--- Total lines in file ---"
-          wc -l certin_guidelines.html
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          curl -s -L -H "User-Agent: $UA" -o sebi_pr.html \
+            "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=23&smid=0"
+          curl -s -L -H "User-Agent: $UA" -o sebi_public_notice.html \
+            "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=25&smid=0"
+          curl -s -L -H "User-Agent: $UA" -o sebi_news_clarification.html \
+            "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=27&smid=0"
+          curl -s -L -H "User-Agent: $UA" -o sebi_speeches.html \
+            "https://www.sebi.gov.in/sebiweb/home/HomeAction.do?doListing=yes&sid=6&ssid=28&smid=0"
+          for f in sebi_pr.html sebi_public_notice.html sebi_news_clarification.html sebi_speeches.html; do
+            echo "$f: $(wc -c < $f) bytes"
+          done
 
       # ---------------- RBI Notifications ----------------
       - name: Check RBI Notifications for new entries
@@ -140,43 +137,59 @@ jobs:
               print(f"  [{item['id']}] {item['title']}")
           EOF
 
-      # ---------------- SEBI Press Releases ----------------
-      - name: Check SEBI Press Releases for new entries
+      # ---------------- SEBI (all 4 sources, consolidated) ----------------
+      - name: Check and extract all SEBI sources
         id: check_sebi
         run: |
-          MAX_ID=$(grep -oP '(?<=_)\d+(?=\.html)' sebi_pr.html | sort -n | tail -1)
-          PREV_ID=$(cat .github/sebi_pr_last_id.txt 2>/dev/null || echo "0")
-          echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
-          echo "prev_id=$PREV_ID" >> $GITHUB_OUTPUT
-          if [ -n "$MAX_ID" ] && [ "$MAX_ID" -gt "$PREV_ID" ]; then
-            echo "new_found=true" >> $GITHUB_OUTPUT
-          else
-            echo "new_found=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Extract new SEBI Press Releases
-        if: steps.check_sebi.outputs.new_found == 'true'
-        run: |
           python3 - <<'EOF'
-          import re, json
-          with open('sebi_pr.html', 'r', encoding='utf-8', errors='ignore') as f:
-              content = f.read()
-          prev_id = int("${{ steps.check_sebi.outputs.prev_id }}")
-          pattern = r'href="(https://www\.sebi\.gov\.in/media-and-notifications/press-releases/[^"]+_(\d+)\.html)"[^>]*>([^<]+)</a>'
-          matches = re.findall(pattern, content)
-          print(f"Total SEBI PR matches: {len(matches)}")
-          new_items, seen = [], set()
-          for url, id_str, title in matches:
-              title = title.strip()
-              if int(id_str) > prev_id and id_str not in seen and len(title) > 10:
-                  seen.add(id_str)
-                  new_items.append({'id': id_str, 'title': title, 'url': url})
-          new_items.sort(key=lambda x: int(x['id']), reverse=True)
-          with open('new_sebi_pr.json', 'w') as f:
-              json.dump(new_items, f, indent=2)
-          print(f"New SEBI PR items found: {len(new_items)}")
-          for item in new_items:
-              print(f"  [{item['id']}] {item['title']}")
+          import re, json, os
+
+          SOURCES = [
+              {"file": "sebi_pr.html",               "state": ".github/sebi_pr_last_id.txt",               "tag": "SEBI PRESS RELEASE",     "out": "new_sebi_pr.json"},
+              {"file": "sebi_public_notice.html",     "state": ".github/sebi_public_notice_last_id.txt",     "tag": "SEBI PUBLIC NOTICE",      "out": "new_sebi_public_notice.json"},
+              {"file": "sebi_news_clarification.html","state": ".github/sebi_news_clarification_last_id.txt","tag": "SEBI NEWS CLARIFICATION", "out": "new_sebi_news_clarification.json"},
+              {"file": "sebi_speeches.html",          "state": ".github/sebi_speeches_last_id.txt",          "tag": "SEBI SPEECH",             "out": "new_sebi_speeches.json"},
+          ]
+
+          pattern = r'href="(https://www\.sebi\.gov\.in/media[^"]*_(\d+)\.html)"[^>]*>([^<]+)</a>'
+
+          any_new = False
+
+          for src in SOURCES:
+              with open(src["file"], 'r', encoding='utf-8', errors='ignore') as f:
+                  content = f.read()
+
+              prev_id = 0
+              if os.path.exists(src["state"]):
+                  with open(src["state"]) as f:
+                      prev_id = int(f.read().strip() or 0)
+
+              matches = re.findall(pattern, content)
+              max_id = prev_id
+              new_items, seen = [], set()
+              for url, id_str, title in matches:
+                  id_int = int(id_str)
+                  max_id = max(max_id, id_int)
+                  title = title.strip()
+                  if id_int > prev_id and id_str not in seen and len(title) > 10:
+                      seen.add(id_str)
+                      new_items.append({'id': id_str, 'title': title, 'url': url, 'tag': src["tag"]})
+
+              new_items.sort(key=lambda x: int(x['id']), reverse=True)
+              with open(src["out"], 'w') as f:
+                  json.dump(new_items, f, indent=2)
+
+              print(f"{src['file']}: {len(matches)} total matches, {len(new_items)} new, max_id={max_id}, prev_id={prev_id}")
+
+              if new_items:
+                  any_new = True
+
+              os.makedirs(os.path.dirname(src["state"]), exist_ok=True)
+              with open(src["state"], 'w') as f:
+                  f.write(str(max_id))
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"new_found={'true' if any_new else 'false'}\n")
           EOF
 
       # ---------------- CERT-In Guidelines ----------------
@@ -240,12 +253,16 @@ jobs:
               except FileNotFoundError:
                   return []
 
-          notif_items = load('new_notifications.json')
-          md_items    = load('new_master_directions.json')
-          sebi_items  = load('new_sebi_pr.json')
-          certin_items = load('new_certin_guidelines.json')
+          notif_items    = load('new_notifications.json')
+          md_items       = load('new_master_directions.json')
+          sebi_pr        = load('new_sebi_pr.json')
+          sebi_notice    = load('new_sebi_public_notice.json')
+          sebi_news      = load('new_sebi_news_clarification.json')
+          sebi_speeches  = load('new_sebi_speeches.json')
+          certin_items   = load('new_certin_guidelines.json')
 
-          total = len(notif_items) + len(md_items) + len(sebi_items) + len(certin_items)
+          sebi_all = sebi_pr + sebi_notice + sebi_news + sebi_speeches
+          total = len(notif_items) + len(md_items) + len(sebi_all) + len(certin_items)
           today = date.today().strftime('%d-%b-%Y')
 
           # ---- plain text fallback ----
@@ -256,15 +273,15 @@ jobs:
           if md_items:
               lines = [f"- {i['title']}\n  {i['url']}" for i in md_items]
               sections_plain.append(f"RBI MASTER DIRECTIONS ({len(md_items)} new)\n" + "\n\n".join(lines))
-          if sebi_items:
-              lines = [f"- {i['title']}\n  {i['url']}" for i in sebi_items]
-              sections_plain.append(f"SEBI PRESS RELEASES ({len(sebi_items)} new)\n" + "\n\n".join(lines))
+          if sebi_all:
+              lines = [f"- [{i['tag']}] {i['title']}\n  {i['url']}" for i in sebi_all]
+              sections_plain.append(f"SEBI UPDATES ({len(sebi_all)} new)\n" + "\n\n".join(lines))
           if certin_items:
               lines = [f"- {i['title']}\n  {i['url']}" for i in certin_items]
               sections_plain.append(f"CERT-IN GUIDELINES ({len(certin_items)} new)\n" + "\n\n".join(lines))
 
           plain_body = textwrap.dedent(f"""\
-          Hi team, Please find the recent regulatory update
+          Hi Team, Please find the recent regulatory update
 
           {total} new item(s) published across RBI, SEBI, and CERT-In.
 
@@ -287,7 +304,6 @@ jobs:
           Team Aumyaa
           """)
 
-          # ---- html: card-style list ----
           def card(item, tag):
               return textwrap.dedent(f"""\
               <div style="padding:14px 18px;border-left:3px solid #f7c600;background:#fafafa;margin-bottom:10px;border-radius:0 6px 6px 0;">
@@ -302,9 +318,9 @@ jobs:
           if md_items:
               cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">RBI Master Directions</p>'
               cards += "".join(card(i, "RBI MASTER DIRECTION") for i in md_items)
-          if sebi_items:
-              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">SEBI Press Releases</p>'
-              cards += "".join(card(i, "SEBI PRESS RELEASE") for i in sebi_items)
+          if sebi_all:
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">SEBI Updates</p>'
+              cards += "".join(card(i, i['tag']) for i in sebi_all)
           if certin_items:
               cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">CERT-In Guidelines</p>'
               cards += "".join(card(i, "CERT-IN GUIDELINE") for i in certin_items)
@@ -347,7 +363,7 @@ jobs:
           parts = []
           if notif_items:  parts.append(f"{len(notif_items)} RBI Notification(s)")
           if md_items:     parts.append(f"{len(md_items)} RBI Master Direction(s)")
-          if sebi_items:   parts.append(f"{len(sebi_items)} SEBI PR(s)")
+          if sebi_all:     parts.append(f"{len(sebi_all)} SEBI Update(s)")
           if certin_items: parts.append(f"{len(certin_items)} CERT-In Guideline(s)")
           subject = "Regulatory Alert: " + " + ".join(parts) + " Published"
 
@@ -376,15 +392,12 @@ jobs:
           if [ "${{ steps.check_md.outputs.new_found }}" == "true" ]; then
             echo "${{ steps.check_md.outputs.max_id }}" > .github/rbi_md_last_id.txt
           fi
-          if [ "${{ steps.check_sebi.outputs.new_found }}" == "true" ]; then
-            echo "${{ steps.check_sebi.outputs.max_id }}" > .github/sebi_pr_last_id.txt
-          fi
           if [ "${{ steps.check_certin.outputs.new_found }}" == "true" ]; then
             echo "${{ steps.check_certin.outputs.max_key }}" > .github/certin_guidelines_last_key.txt
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/rbi_notif_last_id.txt .github/rbi_md_last_id.txt .github/sebi_pr_last_id.txt .github/certin_guidelines_last_key.txt
+          git add .github/rbi_notif_last_id.txt .github/rbi_md_last_id.txt .github/certin_guidelines_last_key.txt .github/sebi_*_last_id.txt
           git commit -m "chore: update regulatory monitor last-seen IDs" || echo "Nothing to commit"
           git pull --rebase origin main
           git push
