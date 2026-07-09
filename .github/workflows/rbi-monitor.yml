@@ -30,16 +30,18 @@ jobs:
             "https://www.cert-in.org.in/s2cMainServlet?pageid=GUIDLNVIEW01"
           echo "CERT-In Guidelines: $(wc -c < certin_guidelines.html) bytes"
 
-      - name: DEBUG - inspect CERT-In raw structure
+      - name: DEBUG - inspect CERT-In raw structure v2
         run: |
-          echo "--- Does CISG appear at all? ---"
-          grep -c 'CISG' certin_guidelines.html || echo "0 occurrences"
-          echo "--- First 3 raw CISG contexts ---"
-          grep -o '.\{100\}CISG.\{100\}' certin_guidelines.html | head -3
-          echo "--- All href patterns containing s2cMainServlet ---"
-          grep -o 'href="[^"]*s2cMainServlet[^"]*"' certin_guidelines.html | sort -u | head -10
-          echo "--- Page title / body sample (first 1500 chars after <body) ---"
-          sed -n '/<body/,+0p' certin_guidelines.html | head -c 1500
+          echo "--- All CISG occurrences (loose match, no line-width limit) ---"
+          grep -o 'CISG[-A-Za-z0-9]*' certin_guidelines.html | sort -u | head -20
+          echo "--- Lines containing CISG (line numbers) ---"
+          grep -n 'CISG' certin_guidelines.html | head -5
+          echo "--- ALL s2cMainServlet hrefs (uncapped) ---"
+          grep -o 'href="[^"]*s2cMainServlet[^"]*"' certin_guidelines.html | sort -u
+          echo "--- ALL hrefs containing GUIDLN ---"
+          grep -o 'href="[^"]*GUIDLN[^"]*"' certin_guidelines.html | sort -u
+          echo "--- Total lines in file ---"
+          wc -l certin_guidelines.html
 
       # ---------------- RBI Notifications ----------------
       - name: Check RBI Notifications for new entries
