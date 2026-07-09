@@ -30,6 +30,10 @@ jobs:
             "https://www.cert-in.org.in/s2cMainServlet?pageid=GUIDLNVIEW01"
           echo "CERT-In Guidelines: $(wc -c < certin_guidelines.html) bytes"
 
+      - name: DEBUG - show CERT-In raw markup around refcode
+        run: |
+          grep -o '.\{80\}refcode=CISG[^"]*.\{200\}' certin_guidelines.html | head -5
+
       # ---------------- RBI Notifications ----------------
       - name: Check RBI Notifications for new entries
         id: check_notif
