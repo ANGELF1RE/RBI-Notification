@@ -4,6 +4,10 @@ on:
     - cron: '0 3,12 * * 1-5'
   workflow_dispatch:
 
+concurrency:
+  group: regulatory-monitor
+  cancel-in-progress: false
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
@@ -382,4 +386,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .github/rbi_notif_last_id.txt .github/rbi_md_last_id.txt .github/sebi_pr_last_id.txt .github/certin_guidelines_last_key.txt
           git commit -m "chore: update regulatory monitor last-seen IDs" || echo "Nothing to commit"
+          git pull --rebase origin main
           git push
