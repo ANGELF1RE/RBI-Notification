@@ -197,10 +197,8 @@ jobs:
           with open('certin_guidelines.html', 'r', encoding='utf-8', errors='ignore') as f:
               content = f.read()
           prev_key = int("${{ steps.check_certin.outputs.prev_key }}")
-          # UNVERIFIED against raw HTML — run workflow_dispatch once, check the printed
-          # match count below, and adjust this pattern if it's 0 while max_key > 0.
-          pattern = r'refcode=(CISG-(\d{4})-(\d+))"[^>]*>.*?</a>\s*(?:</td>\s*<td[^>]*>)?\(?([^()<]{10,150})\)?'
-          matches = re.findall(pattern, content, re.DOTALL)
+          pattern = r"href='s2cMainServlet\?pageid=GUIDLNVIEW02&refcode=(CISG-(\d{4})-(\d+))'>\s*<b>([^<]+)</b>"
+          matches = re.findall(pattern, content)
           print(f"Total CERT-In matches: {len(matches)}")
           new_items, seen = [], set()
           for refcode, yr, seq, title in matches:
