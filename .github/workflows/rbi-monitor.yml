@@ -401,3 +401,15 @@ jobs:
           git commit -m "chore: update regulatory monitor last-seen IDs" || echo "Nothing to commit"
           git pull --rebase origin main
           git push
+
+      - name: Upload fetched pages for debugging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fetched-pages-${{ github.run_id }}
+          path: |
+            notifications.html
+            master_directions.html
+            certin_guidelines.html
+            sebi_*.html
+          retention-days: 7
