@@ -21,6 +21,10 @@ jobs:
             "https://www.rbi.org.in/scripts/NotificationUser.aspx"
           echo "RBI Notifications: $(wc -c < notifications.html) bytes"
 
+          curl -s -L -H "User-Agent: $UA" -o notifications_rss.xml \
+            "https://rbi.org.in/notifications_rss.xml"
+          echo "RBI RSS: $(wc -c < notifications_rss.xml) bytes"
+
           curl -s -L -H "User-Agent: $UA" -o master_directions.html \
             "https://www.rbi.org.in/Scripts/BS_ViewMasterDirections.aspx"
           echo "RBI Master Directions: $(wc -c < master_directions.html) bytes"
@@ -45,200 +49,31 @@ jobs:
           done
 
       # ---------------- RBI Notifications ----------------
-      - name: Check RBI Notifications for new entries
-        id: check_notif
-        run: |
-          MAX_ID=$(grep -oP '(?<=NotificationUser\.aspx\?Id=)\d+' notifications.html | sort -n | tail -1)
-          PREV_ID=$(cat .github/rbi_notif_last_id.txt 2>/dev/null || echo "0")
-          echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
-          echo "prev_id=$PREV_ID" >> $GITHUB_OUTPUT
-          if [ -n "$MAX_ID" ] && [ "$MAX_ID" -gt "$PREV_ID" ]; then
-            echo "new_found=true" >> $GITHUB_OUTPUT
-          else
-            echo "new_found=false" >> $GITHUB_OUTPUT
-          fi
+      - name: Install parser dependency
+        run: python3 -m pip install -q beautifulsoup4
 
-      - name: Extract new RBI Notifications
-        if: steps.check_notif.outputs.new_found == 'true'
-        run: |
-          python3 - <<'EOF'
-          import re, json
-          with open('notifications.html', 'r', encoding='utf-8', errors='ignore') as f:
-              content = f.read()
-          prev_id = int("${{ steps.check_notif.outputs.prev_id }}")
-          pattern = r'NotificationUser\.aspx\?Id=(\d+)&(?:amp;)?Mode=0[^>]*>([^<]+)</a>'
-          matches = re.findall(pattern, content)
-          print(f"Total notification matches: {len(matches)}")
-          new_items, seen = [], set()
-          for id_str, title in matches:
-              title = title.strip()
-              if int(id_str) > prev_id and id_str not in seen and len(title) > 10:
-                  seen.add(id_str)
-                  new_items.append({
-                      'id': id_str,
-                      'title': title,
-                      'url': f'https://www.rbi.org.in/scripts/NotificationUser.aspx?Id={id_str}&Mode=0'
-                  })
-          new_items.sort(key=lambda x: int(x['id']), reverse=True)
-          with open('new_notifications.json', 'w') as f:
-              json.dump(new_items, f, indent=2)
-          print(f"New notifications found: {len(new_items)}")
-          for item in new_items:
-              print(f"  [{item['id']}] {item['title']}")
-          EOF
+      - name: Extract RBI Notifications
+        id: notif
+        run: python3 .github/scripts/regulatory_monitor.py notif
 
       # ---------------- RBI Master Directions ----------------
-      - name: Check RBI Master Directions for new entries
-        id: check_md
-        run: |
-          MAX_ID=$(grep -oP '(?<=id=)\d+' master_directions.html | sort -n | tail -1)
-          PREV_ID=$(cat .github/rbi_md_last_id.txt 2>/dev/null || echo "0")
-          echo "max_id=$MAX_ID" >> $GITHUB_OUTPUT
-          echo "prev_id=$PREV_ID" >> $GITHUB_OUTPUT
-          if [ -n "$MAX_ID" ] && [ "$MAX_ID" -gt "$PREV_ID" ]; then
-            echo "new_found=true" >> $GITHUB_OUTPUT
-          else
-            echo "new_found=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Extract new RBI Master Directions
-        if: steps.check_md.outputs.new_found == 'true'
-        run: |
-          python3 - <<'EOF'
-          import re, json, base64
-          with open('master_directions.html', 'r', encoding='utf-8', errors='ignore') as f:
-              content = f.read()
-          prev_id = int("${{ steps.check_md.outputs.prev_id }}")
-          viewstate_match = re.search(r'__VIEWSTATE[^>]*value="([^"]+)"', content)
-          decoded_text = ""
-          if viewstate_match:
-              try:
-                  decoded_text = base64.b64decode(viewstate_match.group(1)).decode('utf-8', errors='ignore')
-              except Exception as e:
-                  print(f"Decode error: {e}")
-          pattern = r'href=BS_ViewMasDirections\.aspx\?id=(\d+)>\s*([^<]+)'
-          matches = re.findall(pattern, decoded_text)
-          print(f"Total master direction matches: {len(matches)}")
-          new_items, seen = [], set()
-          for id_str, title in matches:
-              title = title.strip()
-              if int(id_str) > prev_id and id_str not in seen and len(title) > 10:
-                  seen.add(id_str)
-                  new_items.append({
-                      'id': id_str,
-                      'title': title,
-                      'url': f'https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id={id_str}'
-                  })
-          new_items.sort(key=lambda x: int(x['id']), reverse=True)
-          with open('new_master_directions.json', 'w') as f:
-              json.dump(new_items, f, indent=2)
-          print(f"New master directions found: {len(new_items)}")
-          for item in new_items:
-              print(f"  [{item['id']}] {item['title']}")
-          EOF
+      - name: Extract RBI Master Directions
+        id: md
+        run: python3 .github/scripts/regulatory_monitor.py md
 
       # ---------------- SEBI (all 4 sources, consolidated) ----------------
-      - name: Check and extract all SEBI sources
-        id: check_sebi
-        run: |
-          python3 - <<'EOF'
-          import re, json, os
-
-          SOURCES = [
-              {"file": "sebi_pr.html",               "state": ".github/sebi_pr_last_id.txt",               "tag": "SEBI PRESS RELEASE",     "out": "new_sebi_pr.json"},
-              {"file": "sebi_public_notice.html",     "state": ".github/sebi_public_notice_last_id.txt",     "tag": "SEBI PUBLIC NOTICE",      "out": "new_sebi_public_notice.json"},
-              {"file": "sebi_news_clarification.html","state": ".github/sebi_news_clarification_last_id.txt","tag": "SEBI NEWS CLARIFICATION", "out": "new_sebi_news_clarification.json"},
-              {"file": "sebi_speeches.html",          "state": ".github/sebi_speeches_last_id.txt",          "tag": "SEBI SPEECH",             "out": "new_sebi_speeches.json"},
-          ]
-
-          pattern = r'href="(https://www\.sebi\.gov\.in/media[^"]*_(\d+)\.html)"[^>]*>([^<]+)</a>'
-
-          any_new = False
-
-          for src in SOURCES:
-              with open(src["file"], 'r', encoding='utf-8', errors='ignore') as f:
-                  content = f.read()
-
-              prev_id = 0
-              if os.path.exists(src["state"]):
-                  with open(src["state"]) as f:
-                      prev_id = int(f.read().strip() or 0)
-
-              matches = re.findall(pattern, content)
-              max_id = prev_id
-              new_items, seen = [], set()
-              for url, id_str, title in matches:
-                  id_int = int(id_str)
-                  max_id = max(max_id, id_int)
-                  title = title.strip()
-                  if id_int > prev_id and id_str not in seen and len(title) > 10:
-                      seen.add(id_str)
-                      new_items.append({'id': id_str, 'title': title, 'url': url, 'tag': src["tag"]})
-
-              new_items.sort(key=lambda x: int(x['id']), reverse=True)
-              with open(src["out"], 'w') as f:
-                  json.dump(new_items, f, indent=2)
-
-              print(f"{src['file']}: {len(matches)} total matches, {len(new_items)} new, max_id={max_id}, prev_id={prev_id}")
-
-              if new_items:
-                  any_new = True
-
-              os.makedirs(os.path.dirname(src["state"]), exist_ok=True)
-              with open(src["state"], 'w') as f:
-                  f.write(str(max_id))
-
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-              f.write(f"new_found={'true' if any_new else 'false'}\n")
-          EOF
+      - name: Extract SEBI updates
+        id: sebi
+        run: python3 .github/scripts/regulatory_monitor.py sebi
 
       # ---------------- CERT-In Guidelines ----------------
-      - name: Check CERT-In Guidelines for new entries
-        id: check_certin
-        run: |
-          MAX_KEY=$(grep -oP 'CISG-\d{4}-\d+' certin_guidelines.html | sort -u | awk -F'-' '{printf "%d%02d\n",$2,$3}' | sort -n | tail -1)
-          PREV_KEY=$(cat .github/certin_guidelines_last_key.txt 2>/dev/null || echo "0")
-          echo "max_key=$MAX_KEY" >> $GITHUB_OUTPUT
-          echo "prev_key=$PREV_KEY" >> $GITHUB_OUTPUT
-          if [ -n "$MAX_KEY" ] && [ "$MAX_KEY" -gt "$PREV_KEY" ]; then
-            echo "new_found=true" >> $GITHUB_OUTPUT
-          else
-            echo "new_found=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Extract new CERT-In Guidelines
-        if: steps.check_certin.outputs.new_found == 'true'
-        run: |
-          python3 - <<'EOF'
-          import re, json
-          with open('certin_guidelines.html', 'r', encoding='utf-8', errors='ignore') as f:
-              content = f.read()
-          prev_key = int("${{ steps.check_certin.outputs.prev_key }}")
-          pattern = r"href='s2cMainServlet\?pageid=GUIDLNVIEW02&refcode=(CISG-(\d{4})-(\d+))'>\s*<b>([^<]+)</b>"
-          matches = re.findall(pattern, content)
-          print(f"Total CERT-In matches: {len(matches)}")
-          new_items, seen = [], set()
-          for refcode, yr, seq, title in matches:
-              key = int(yr) * 100 + int(seq)
-              if key > prev_key and refcode not in seen:
-                  seen.add(refcode)
-                  new_items.append({
-                      'id': refcode,
-                      'key': key,
-                      'title': title.strip(),
-                      'url': f'https://www.cert-in.org.in/s2cMainServlet?pageid=GUIDLNVIEW02&refcode={refcode}'
-                  })
-          new_items.sort(key=lambda x: x['key'], reverse=True)
-          with open('new_certin_guidelines.json', 'w') as f:
-              json.dump(new_items, f, indent=2)
-          print(f"New CERT-In guidelines found: {len(new_items)}")
-          for item in new_items:
-              print(f"  [{item['id']}] {item['title']}")
-          EOF
+      - name: Extract CERT-In Guidelines
+        id: certin
+        run: python3 .github/scripts/regulatory_monitor.py certin
 
       # ---------------- Email ----------------
       - name: Send email alert
-        if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true' || steps.check_sebi.outputs.new_found == 'true' || steps.check_certin.outputs.new_found == 'true'
+        if: steps.notif.outputs.new_found == 'true' || steps.md.outputs.new_found == 'true' || steps.sebi.outputs.new_found == 'true' || steps.certin.outputs.new_found == 'true'
         run: |
           python3 - <<'EOF'
           import json, smtplib, textwrap
@@ -383,22 +218,13 @@ jobs:
           EOF
 
       # ---------------- Save state ----------------
-      - name: Save new IDs and push
-        if: steps.check_notif.outputs.new_found == 'true' || steps.check_md.outputs.new_found == 'true' || steps.check_sebi.outputs.new_found == 'true' || steps.check_certin.outputs.new_found == 'true'
+      - name: Save state and push
+        if: steps.notif.outputs.new_found == 'true' || steps.md.outputs.new_found == 'true' || steps.sebi.outputs.new_found == 'true' || steps.certin.outputs.new_found == 'true'
         run: |
-          if [ "${{ steps.check_notif.outputs.new_found }}" == "true" ]; then
-            echo "${{ steps.check_notif.outputs.max_id }}" > .github/rbi_notif_last_id.txt
-          fi
-          if [ "${{ steps.check_md.outputs.new_found }}" == "true" ]; then
-            echo "${{ steps.check_md.outputs.max_id }}" > .github/rbi_md_last_id.txt
-          fi
-          if [ "${{ steps.check_certin.outputs.new_found }}" == "true" ]; then
-            echo "${{ steps.check_certin.outputs.max_key }}" > .github/certin_guidelines_last_key.txt
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/rbi_notif_last_id.txt .github/rbi_md_last_id.txt .github/certin_guidelines_last_key.txt .github/sebi_*_last_id.txt
-          git commit -m "chore: update regulatory monitor last-seen IDs" || echo "Nothing to commit"
+          git add .github/rbi_notif_sent.json .github/rbi_md_sent.json .github/sebi_sent.json .github/certin_sent.json
+          git commit -m "chore: update regulatory monitor sent-set" || echo "Nothing to commit"
           git pull --rebase origin main
           git push
 
@@ -409,6 +235,7 @@ jobs:
           name: fetched-pages-${{ github.run_id }}
           path: |
             notifications.html
+            notifications_rss.xml
             master_directions.html
             certin_guidelines.html
             sebi_*.html
