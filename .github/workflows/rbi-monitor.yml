@@ -98,7 +98,14 @@ jobs:
 
           sebi_all = sebi_pr + sebi_notice + sebi_news + sebi_speeches
           total = len(notif_items) + len(md_items) + len(sebi_all) + len(certin_items)
-          today = date.today().strftime('%d-%b-%Y')
+
+          all_items = notif_items + md_items + sebi_all + certin_items
+          dates = set(i['date'] for i in all_items if i.get('date'))
+          label_date = (
+              sorted(dates)[0] if len(dates) == 1
+              else f"{sorted(dates)[0]} \u2013 {sorted(dates)[-1]}" if len(dates) >= 2
+              else date.today().strftime('%d-%b-%Y')
+          )
 
           # ---- plain text fallback ----
           sections_plain = []
@@ -167,7 +174,7 @@ jobs:
           <h1 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;letter-spacing:.5px;">AUMYAA</h1>
           <p style="color:#f7c600;margin:2px 0 14px 0;font-size:10px;letter-spacing:2px;text-transform:uppercase;">Consulting Services LLP</p>
           <h2 style="color:#ffffff;margin:0;font-size:18px;font-weight:700;">Regulatory Updates</h2>
-          <p style="color:#f7c600;margin:4px 0 0 0;font-size:12px;">{today}</p>
+          <p style="color:#f7c600;margin:4px 0 0 0;font-size:12px;">{label_date}</p>
           </div>
           <div style="height:3px;background:#f7c600;"></div>
           <div style="padding:24px 24px 8px 24px;">
