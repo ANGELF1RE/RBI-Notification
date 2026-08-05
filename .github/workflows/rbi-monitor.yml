@@ -1,7 +1,7 @@
 name: RBI/SEBI/CERT-In Monitor - Notifications & Guidelines
 on:
   schedule:
-    - cron: '0 3,12,14 * * 1-5'
+    - cron: '0 3,12,18 * * 1-5'
   workflow_dispatch:
 
 concurrency:
