@@ -1,7 +1,7 @@
 name: RBI/SEBI/CERT-In Monitor - Notifications & Guidelines
 on:
   schedule:
-    - cron: '0 3,12 * * 1-5'
+    - cron: '0 3,12,14 * * 1-5'
   workflow_dispatch:
 
 concurrency:
@@ -224,9 +224,9 @@ jobs:
               print(f"Email sent to {len(to_email_list)} recipients: {subject}")
           EOF
 
-      # ---------------- Save state ----------------
+      # ---------------- Save state (always) ----------------
       - name: Save state and push
-        if: steps.notif.outputs.new_found == 'true' || steps.md.outputs.new_found == 'true' || steps.sebi.outputs.new_found == 'true' || steps.certin.outputs.new_found == 'true'
+        if: always() && (steps.notif.outcome == 'success' || steps.md.outcome == 'success' || steps.sebi.outcome == 'success' || steps.certin.outcome == 'success')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
