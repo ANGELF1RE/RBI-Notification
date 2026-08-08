@@ -148,10 +148,15 @@ jobs:
 
           def card(item, tag):
               return textwrap.dedent(f"""\
-              <div style="padding:14px 18px;border-left:3px solid #f7c600;background:#fafafa;margin-bottom:10px;border-radius:0 6px 6px 0;">
-              <span style="display:inline-block;background:#111111;color:#f7c600;font-size:11px;font-weight:bold;letter-spacing:.5px;padding:2px 8px;border-radius:10px;margin-bottom:6px;">{tag}</span>
-              <div style="margin-top:6px;"><a href="{item['url']}" style="color:#111111;font-size:14px;font-weight:600;text-decoration:none;line-height:1.4;">{item['title']}</a></div>
-              </div>""")
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
+              <tr>
+              <td width="3" bgcolor="#f7c600" style="background-color:#f7c600;font-size:1px;line-height:1px;">&nbsp;</td>
+              <td class="aumyaa-card-bg" bgcolor="#fafafa" style="background-color:#fafafa;padding:14px 18px;">
+              <span style="display:inline-block;background-color:#111111;color:#f7c600;font-size:11px;font-weight:bold;letter-spacing:.5px;padding:2px 8px;">{tag}</span>
+              <div style="margin-top:6px;"><a href="{item['url']}" style="color:#111111;font-size:14px;font-weight:600;line-height:1.4;">{item['title']}</a></div>
+              </td>
+              </tr>
+              </table>""")
 
           cards = ""
           if notif_items:
@@ -168,34 +173,78 @@ jobs:
               cards += "".join(card(i, "CERT-IN GUIDELINE") for i in certin_items)
 
           html_body = textwrap.dedent(f"""\
-          <html><body style="margin:0;padding:0;background:#eeeeee;font-family:Arial,Helvetica,sans-serif;">
-          <div style="max-width:640px;margin:20px auto;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-          <div style="background:#111111;padding:28px 24px 22px 24px;text-align:center;">
-          <h1 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;letter-spacing:.5px;">AUMYAA</h1>
-          <p style="color:#f7c600;margin:2px 0 14px 0;font-size:10px;letter-spacing:2px;text-transform:uppercase;">Consulting Services LLP</p>
-          <h2 style="color:#ffffff;margin:0;font-size:18px;font-weight:700;">Regulatory Updates</h2>
-          <p style="color:#f7c600;margin:4px 0 0 0;font-size:12px;">{label_date}</p>
-          </div>
-          <div style="height:3px;background:#f7c600;"></div>
-          <div style="padding:24px 24px 8px 24px;">
-          <p style="color:#111111;font-size:15px;margin:0 0 2px 0;">Hi team,</p>
-          <p style="color:#555555;font-size:14px;margin:0 0 4px 0;">Please find the recent regulatory update — <b style="color:#111111;">{total} new item(s)</b> published.</p>
+          <!DOCTYPE html>
+          <html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+          <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="color-scheme" content="light only">
+          <meta name="supported-color-schemes" content="light only">
+          <!--[if mso]>
+          <style type="text/css">
+          body, table, td {{ font-family: Arial, Helvetica, sans-serif !important; }}
+          </style>
+          <noscript>
+          <xml>
+          <o:OfficeDocumentSettings>
+          <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+          </xml>
+          </noscript>
+          <![endif]-->
+          <style type="text/css">
+            body {{ margin:0; padding:0; background:#eeeeee; }}
+            table {{ border-collapse:collapse; }}
+            a {{ text-decoration:none; }}
+            [data-ogsc] .aumyaa-dark-bg,
+            [data-ogsb] .aumyaa-dark-bg {{ background-color:#111111 !important; }}
+            [data-ogsc] .aumyaa-white-text,
+            [data-ogsb] .aumyaa-white-text {{ color:#ffffff !important; }}
+            [data-ogsc] .aumyaa-yellow-text,
+            [data-ogsb] .aumyaa-yellow-text {{ color:#f7c600 !important; }}
+            [data-ogsc] .aumyaa-card-bg,
+            [data-ogsb] .aumyaa-card-bg {{ background-color:#fafafa !important; }}
+            [data-ogsc] .aumyaa-body-text,
+            [data-ogsb] .aumyaa-body-text {{ color:#111111 !important; }}
+          </style>
+          </head>
+          <body style="margin:0;padding:0;background:#eeeeee;font-family:Arial,Helvetica,sans-serif;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eeeeee;">
+          <tr><td align="center" style="padding:20px 12px;">
+          <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;width:100%;background:#ffffff;">
+
+          <tr><td class="aumyaa-dark-bg" bgcolor="#111111" style="background-color:#111111;padding:28px 24px 22px 24px;text-align:center;">
+          <h1 class="aumyaa-white-text" style="color:#ffffff;margin:0;font-size:20px;font-weight:700;letter-spacing:.5px;">AUMYAA</h1>
+          <p class="aumyaa-yellow-text" style="color:#f7c600;margin:2px 0 14px 0;font-size:10px;letter-spacing:2px;text-transform:uppercase;">Consulting Services LLP</p>
+          <h2 class="aumyaa-white-text" style="color:#ffffff;margin:0;font-size:18px;font-weight:700;">Regulatory Updates</h2>
+          <p class="aumyaa-yellow-text" style="color:#f7c600;margin:4px 0 0 0;font-size:12px;">{label_date}</p>
+          </td></tr>
+
+          <tr><td bgcolor="#f7c600" style="background-color:#f7c600;height:3px;line-height:3px;font-size:1px;">&nbsp;</td></tr>
+
+          <tr><td style="padding:24px 24px 8px 24px;">
+          <p class="aumyaa-body-text" style="color:#111111;font-size:15px;margin:0 0 2px 0;">Hi team,</p>
+          <p style="color:#555555;font-size:14px;margin:0 0 4px 0;">Please find the recent regulatory update — <b class="aumyaa-body-text" style="color:#111111;">{total} new item(s)</b> published.</p>
           {cards}
-          </div>
-          <div style="background:#111111;padding:26px 24px;margin-top:10px;">
-          <p style="color:#f7c600;text-align:center;letter-spacing:3px;font-size:10px;margin:0 0 18px 0;text-transform:uppercase;">— — — — — Get in touch — — — — —</p>
-          <p style="color:#ffffff;font-size:13px;margin:0 0 3px 0;font-weight:bold;">Aumyaa Consulting Services LLP</p>
+          </td></tr>
+
+          <tr><td class="aumyaa-dark-bg" bgcolor="#111111" style="background-color:#111111;padding:26px 24px;">
+          <p class="aumyaa-yellow-text" style="color:#f7c600;text-align:center;letter-spacing:3px;font-size:10px;margin:0 0 18px 0;text-transform:uppercase;">— — — — — Get in touch — — — — —</p>
+          <p class="aumyaa-white-text" style="color:#ffffff;font-size:13px;margin:0 0 3px 0;font-weight:bold;">Aumyaa Consulting Services LLP</p>
           <p style="color:#999999;font-size:11px;margin:0 0 14px 0;line-height:1.5;">
           2414, 4th Floor, Express Trade Tower 2 B36, Sector 132, Noida, Uttar Pradesh — 201301<br>
           Services: PAN India
           </p>
-          <p style="color:#dddddd;font-size:12px;margin:0 0 4px 0;">Yukti Arora: &nbsp;·&nbsp; <a href="mailto:yukti.arora@aumyaa.com" style="color:#f7c600;text-decoration:none;">yukti.arora@aumyaa.com</a></p>
-          <p style="color:#dddddd;font-size:12px;margin:0 0 14px 0;">Ayushi Aggarwal: &nbsp;·&nbsp; <a href="mailto:ayushi.aggarwal@aumyaa.com" style="color:#f7c600;text-decoration:none;">ayushi.aggarwal@aumyaa.com</a></p>
-          <p style="margin:0 0 12px 0;"><a href="https://www.aumyaa.com" style="color:#f7c600;font-size:12px;text-decoration:none;">www.aumyaa.com</a></p>
-          <p style="color:#777777;font-size:10px;margin:0 0 16px 0;">Follow us on <a href="https://www.linkedin.com/company/aumyaa" style="color:#f7c600;text-decoration:none;">LinkedIn</a> &amp; <a href="https://www.youtube.com/@aumyaalearningacademy5425" style="color:#f7c600;text-decoration:none;">YouTube</a> for updates on NBFC regulatory compliance.</p>
-          <p style="color:#ffffff;font-size:12px;margin:0;">Warm regards,<br>Team Aumyaa</p>
-          </div>
-          </div>
+          <p style="color:#dddddd;font-size:12px;margin:0 0 4px 0;">Yukti Arora: &nbsp;·&nbsp; <a href="mailto:yukti.arora@aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;">yukti.arora@aumyaa.com</a></p>
+          <p style="color:#dddddd;font-size:12px;margin:0 0 14px 0;">Ayushi Aggarwal: &nbsp;·&nbsp; <a href="mailto:ayushi.aggarwal@aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;">ayushi.aggarwal@aumyaa.com</a></p>
+          <p style="margin:0 0 12px 0;"><a href="https://www.aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;font-size:12px;">www.aumyaa.com</a></p>
+          <p style="color:#777777;font-size:10px;margin:0 0 16px 0;">Follow us on <a href="https://www.linkedin.com/company/aumyaa" class="aumyaa-yellow-text" style="color:#f7c600;">LinkedIn</a> &amp; <a href="https://www.youtube.com/@aumyaalearningacademy5425" class="aumyaa-yellow-text" style="color:#f7c600;">YouTube</a> for updates on NBFC regulatory compliance.</p>
+          <p class="aumyaa-white-text" style="color:#ffffff;font-size:12px;margin:0;">Warm regards,<br>Team Aumyaa</p>
+          </td></tr>
+
+          </table>
+          </td></tr>
+          </table>
           </body></html>""")
 
           gmail_user = "${{ secrets.GMAIL_USER }}"
