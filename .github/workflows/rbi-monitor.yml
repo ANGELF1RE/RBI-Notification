@@ -97,7 +97,8 @@ jobs:
           certin_items   = load('new_certin_guidelines.json')
 
           sebi_all = sebi_pr + sebi_notice + sebi_news + sebi_speeches
-          total = len(notif_items) + len(md_items) + len(sebi_all) + len(certin_items)
+          rbi_all  = notif_items + md_items
+          total = len(rbi_all) + len(sebi_all) + len(certin_items)
 
           all_items = notif_items + md_items + sebi_all + certin_items
           dates = set(i['date'] for i in all_items if i.get('date'))
@@ -147,31 +148,73 @@ jobs:
           Team Aumyaa
           """)
 
+          # ---- category badges (icon + label + count), mirrors the reference banner's icon row ----
+          def category_badge(emoji, label, count):
+              if count == 0:
+                  return ""
+              return textwrap.dedent(f"""\
+              <td align="center" valign="top" style="padding:0 16px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td align="center" valign="middle" bgcolor="#f7c600" style="background-color:#f7c600;width:54px;height:54px;border-radius:27px;font-size:22px;line-height:54px;">{emoji}</td>
+              </tr></table>
+              <div style="color:#111111;font-size:11px;font-weight:bold;letter-spacing:.3px;margin-top:8px;white-space:nowrap;">{label}</div>
+              <div style="color:#8a6d00;font-size:11px;margin-top:1px;">{count} new</div>
+              </td>""")
+
+          badges = "".join([
+              category_badge("\U0001F3E6", "RBI", len(rbi_all)),
+              category_badge("\U0001F4CA", "SEBI", len(sebi_all)),
+              category_badge("\U0001F6E1", "CERT-IN", len(certin_items)),
+          ])
+
+          # ---- item card, styled as a clickable row with an arrow, like the reference template's link blocks ----
           def card(item, tag):
               return textwrap.dedent(f"""\
+              <a href="{item['url']}" style="text-decoration:none;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">
               <tr>
-              <td width="3" bgcolor="#f7c600" style="background-color:#f7c600;font-size:1px;line-height:1px;">&nbsp;</td>
-              <td class="aumyaa-card-bg" bgcolor="#fafafa" style="background-color:#fafafa;padding:14px 18px;">
-              <span style="display:inline-block;background-color:#111111;color:#f7c600;font-size:11px;font-weight:bold;letter-spacing:.5px;padding:2px 8px;">{tag}</span>
-              <div style="margin-top:6px;"><a href="{item['url']}" style="color:#111111;font-size:14px;font-weight:600;line-height:1.4;">{item['title']}</a></div>
+              <td width="4" bgcolor="#f7c600" style="background-color:#f7c600;font-size:1px;line-height:1px;">&nbsp;</td>
+              <td class="aumyaa-card-bg" bgcolor="#fafafa" style="background-color:#fafafa;padding:14px 16px;">
+              <span style="display:inline-block;background-color:#111111;color:#f7c600;font-size:10px;font-weight:bold;letter-spacing:.5px;padding:2px 8px;border-radius:2px;">{tag}</span>
+              <div style="margin-top:7px;color:#111111;font-size:14px;font-weight:600;line-height:1.4;">{item['title']}</div>
               </td>
+              <td width="34" align="center" valign="middle" bgcolor="#fafafa" style="background-color:#fafafa;color:#f7c600;font-size:18px;font-weight:bold;">&rsaquo;</td>
               </tr>
-              </table>""")
+              </table>
+              </a>""")
 
           cards = ""
           if notif_items:
-              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">RBI Notifications</p>'
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:22px 0 10px 0;">RBI Notifications</p>'
               cards += "".join(card(i, "RBI NOTIFICATION") for i in notif_items)
           if md_items:
-              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">RBI Master Directions</p>'
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:22px 0 10px 0;">RBI Master Directions</p>'
               cards += "".join(card(i, "RBI MASTER DIRECTION") for i in md_items)
           if sebi_all:
-              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">SEBI Updates</p>'
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:22px 0 10px 0;">SEBI Updates</p>'
               cards += "".join(card(i, i['tag']) for i in sebi_all)
           if certin_items:
-              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 10px 0;">CERT-In Guidelines</p>'
+              cards += '<p style="color:#111111;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;margin:22px 0 10px 0;">CERT-In Guidelines</p>'
               cards += "".join(card(i, "CERT-IN GUIDELINE") for i in certin_items)
+
+          # ---- primary CTA link (first item, falls back to insights page) ----
+          cta_url = all_items[0]['url'] if all_items else "https://aumyaa.com/insights"
+
+          # ---- social icon buttons ----
+          def social_icon(url, glyph):
+              return textwrap.dedent(f"""\
+              <td style="padding:0 4px;">
+              <a href="{url}" style="text-decoration:none;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td align="center" valign="middle" bgcolor="#f7c600" style="background-color:#f7c600;width:30px;height:30px;border-radius:15px;color:#111111;font-size:13px;font-weight:bold;line-height:30px;">{glyph}</td>
+              </tr></table>
+              </a>
+              </td>""")
+
+          social_icons = "".join([
+              social_icon("https://www.linkedin.com/company/aumyaa", "in"),
+              social_icon("https://www.youtube.com/@aumyaalearningacademy5425", "\u25B6"),
+          ])
 
           html_body = textwrap.dedent(f"""\
           <!DOCTYPE html>
@@ -210,38 +253,92 @@ jobs:
           </style>
           </head>
           <body style="margin:0;padding:0;background:#eeeeee;font-family:Arial,Helvetica,sans-serif;">
+
+          <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{total} new regulatory update(s) from RBI, SEBI and CERT-In &nbsp;\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C\u200C</div>
+
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eeeeee;">
           <tr><td align="center" style="padding:20px 12px;">
           <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;width:100%;background:#ffffff;">
 
-          <tr><td class="aumyaa-dark-bg" bgcolor="#111111" style="background-color:#111111;padding:28px 24px 22px 24px;text-align:center;">
-          <h1 class="aumyaa-white-text" style="color:#ffffff;margin:0;font-size:20px;font-weight:700;letter-spacing:.5px;">AUMYAA</h1>
-          <p class="aumyaa-yellow-text" style="color:#f7c600;margin:2px 0 14px 0;font-size:10px;letter-spacing:2px;text-transform:uppercase;">Consulting Services LLP</p>
-          <h2 class="aumyaa-white-text" style="color:#ffffff;margin:0;font-size:18px;font-weight:700;">Regulatory Updates</h2>
-          <p class="aumyaa-yellow-text" style="color:#f7c600;margin:4px 0 0 0;font-size:12px;">{label_date}</p>
+          <!-- HERO / MASTHEAD -->
+          <tr><td class="aumyaa-dark-bg" bgcolor="#111111" style="background-color:#111111;background-image:linear-gradient(135deg,#111111 60%,#22242a 100%);padding:30px 24px 26px 24px;text-align:center;border-top:4px solid #f7c600;">
+          <h1 class="aumyaa-white-text" style="color:#ffffff;margin:0;font-size:22px;font-weight:800;letter-spacing:1px;">AUMYAA</h1>
+          <p class="aumyaa-yellow-text" style="color:#f7c600;margin:2px 0 18px 0;font-size:10px;letter-spacing:2.5px;text-transform:uppercase;">Consulting Services LLP</p>
+          <h2 class="aumyaa-white-text" style="color:#ffffff;margin:0;font-size:22px;font-weight:800;line-height:1.3;">REGULATORY UPDATES</h2>
+          <p style="color:#bbbbbb;margin:6px 0 22px 0;font-size:13px;">{total} new item(s) &middot; {label_date}</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+          {badges}
+          </tr></table>
           </td></tr>
 
           <tr><td bgcolor="#f7c600" style="background-color:#f7c600;height:3px;line-height:3px;font-size:1px;">&nbsp;</td></tr>
 
-          <tr><td style="padding:24px 24px 8px 24px;">
-          <p class="aumyaa-body-text" style="color:#111111;font-size:15px;margin:0 0 2px 0;">Hi team,</p>
-          <p style="color:#555555;font-size:14px;margin:0 0 4px 0;">Please find the recent regulatory update — <b class="aumyaa-body-text" style="color:#111111;">{total} new item(s)</b> published.</p>
+          <!-- CTA BANNER -->
+          <tr><td style="padding:20px 24px 0 24px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#111111;">
+          <tr>
+          <td style="padding:16px 18px;">
+          <p class="aumyaa-white-text" style="color:#ffffff;margin:0;font-size:13px;font-weight:bold;letter-spacing:.3px;">STAY INFORMED. VIEW. UNDERSTAND. COMPLY.</p>
+          <p style="color:#999999;margin:4px 0 0 0;font-size:11px;">Access the detailed insights, key changes and effective dates below.</p>
+          </td>
+          <td align="right" style="padding:16px 18px;white-space:nowrap;">
+          <a href="{cta_url}" style="display:inline-block;background-color:#f7c600;color:#111111;font-size:12px;font-weight:bold;padding:10px 16px;border-radius:2px;">VIEW UPDATES</a>
+          </td>
+          </tr>
+          </table>
+          </td></tr>
+
+          <!-- ITEM LIST -->
+          <tr><td style="padding:8px 24px 8px 24px;">
+          <p class="aumyaa-body-text" style="color:#111111;font-size:15px;margin:16px 0 0 0;">Hi team,</p>
+          <p style="color:#555555;font-size:14px;margin:2px 0 4px 0;">Please find the recent regulatory update &mdash; <b class="aumyaa-body-text" style="color:#111111;">{total} new item(s)</b> published.</p>
           {cards}
           </td></tr>
 
+          <!-- CONNECT BAR -->
+          <tr><td style="padding:6px 24px 24px 24px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#00a99d;">
+          <tr>
+          <td style="padding:14px 18px;color:#ffffff;font-size:13px;font-style:italic;">Connect with Our Experts</td>
+          <td align="right" style="padding:14px 18px;">
+          <a href="https://www.aumyaa.com" style="display:inline-block;background-color:#ffffff;color:#00a99d;font-size:11px;font-weight:bold;padding:6px 14px;border-radius:2px;">Click here</a>
+          </td>
+          </tr>
+          </table>
+          </td></tr>
+
+          <!-- FOOTER -->
           <tr><td class="aumyaa-dark-bg" bgcolor="#111111" style="background-color:#111111;padding:26px 24px;">
-          <p class="aumyaa-yellow-text" style="color:#f7c600;text-align:center;letter-spacing:3px;font-size:10px;margin:0 0 18px 0;text-transform:uppercase;">— — — — — Get in touch — — — — —</p>
-          <p class="aumyaa-white-text" style="color:#ffffff;font-size:13px;margin:0 0 3px 0;font-weight:bold;">Aumyaa Consulting Services LLP</p>
-          <p style="color:#999999;font-size:11px;margin:0 0 14px 0;line-height:1.5;">
-          2414, 4th Floor, Express Trade Tower 2 B36, Sector 132, Noida, Uttar Pradesh — 201301<br>
+
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px auto;"><tr>
+          {social_icons}
+          </tr></table>
+
+          <p style="text-align:center;margin:0 0 18px 0;">
+          <a href="https://aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;font-size:11px;margin:0 8px;">About</a>
+          <span style="color:#555555;">|</span>
+          <a href="https://aumyaa.com/insights" class="aumyaa-yellow-text" style="color:#f7c600;font-size:11px;margin:0 8px;">Case Studies</a>
+          <span style="color:#555555;">|</span>
+          <a href="https://aumyaa.com/insights" class="aumyaa-yellow-text" style="color:#f7c600;font-size:11px;margin:0 8px;">Knowledge Base</a>
+          </p>
+
+          <p class="aumyaa-yellow-text" style="color:#f7c600;text-align:center;letter-spacing:3px;font-size:10px;margin:0 0 18px 0;text-transform:uppercase;">&mdash; &mdash; &mdash; &mdash; &mdash; Get in touch &mdash; &mdash; &mdash; &mdash; &mdash;</p>
+          <p class="aumyaa-white-text" style="color:#ffffff;font-size:13px;margin:0 0 3px 0;font-weight:bold;text-align:center;">Aumyaa Consulting Services LLP</p>
+          <p style="color:#999999;font-size:11px;margin:0 0 14px 0;line-height:1.5;text-align:center;">
+          2414, 4th Floor, Express Trade Tower 2 B36, Sector 132, Noida, Uttar Pradesh &mdash; 201301<br>
           Services: PAN India
           </p>
-          <p style="color:#dddddd;font-size:12px;margin:0 0 4px 0;">Yukti Arora: &nbsp;·&nbsp; <a href="mailto:yukti.arora@aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;">yukti.arora@aumyaa.com</a></p>
-          <p style="color:#dddddd;font-size:12px;margin:0 0 14px 0;">Ayushi Aggarwal: &nbsp;·&nbsp; <a href="mailto:ayushi.aggarwal@aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;">ayushi.aggarwal@aumyaa.com</a></p>
-          <p style="margin:0 0 12px 0;"><a href="https://www.aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;font-size:12px;">www.aumyaa.com</a></p>
-          <p style="margin:0 0 12px 0;color:#dddddd;font-size:12px;">Link of Aumyaa website - <a href="https://aumyaa.com/insights" class="aumyaa-yellow-text" style="color:#f7c600;">https://aumyaa.com/insights</a></p>
-          <p style="color:#777777;font-size:10px;margin:0 0 16px 0;">Follow us on <a href="https://www.linkedin.com/company/aumyaa" class="aumyaa-yellow-text" style="color:#f7c600;">LinkedIn</a> &amp; <a href="https://www.youtube.com/@aumyaalearningacademy5425" class="aumyaa-yellow-text" style="color:#f7c600;">YouTube</a> for updates on NBFC regulatory compliance.</p>
-          <p class="aumyaa-white-text" style="color:#ffffff;font-size:12px;margin:0;">Warm regards,<br>Team Aumyaa</p>
+          <p style="color:#dddddd;font-size:12px;margin:0 0 4px 0;text-align:center;">Yukti Arora &nbsp;&middot;&nbsp; <a href="mailto:yukti.arora@aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;">yukti.arora@aumyaa.com</a></p>
+          <p style="color:#dddddd;font-size:12px;margin:0 0 14px 0;text-align:center;">Ayushi Aggarwal &nbsp;&middot;&nbsp; <a href="mailto:ayushi.aggarwal@aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;">ayushi.aggarwal@aumyaa.com</a></p>
+          <p style="margin:0 0 4px 0;text-align:center;"><a href="https://www.aumyaa.com" class="aumyaa-yellow-text" style="color:#f7c600;font-size:12px;">www.aumyaa.com</a></p>
+          <p style="margin:0 0 16px 0;color:#dddddd;font-size:11px;text-align:center;">Insights &amp; publications: <a href="https://aumyaa.com/insights" class="aumyaa-yellow-text" style="color:#f7c600;">aumyaa.com/insights</a></p>
+          <p style="color:#777777;font-size:10px;margin:0 0 18px 0;text-align:center;">Follow us on <a href="https://www.linkedin.com/company/aumyaa" class="aumyaa-yellow-text" style="color:#f7c600;">LinkedIn</a> &amp; <a href="https://www.youtube.com/@aumyaalearningacademy5425" class="aumyaa-yellow-text" style="color:#f7c600;">YouTube</a> for updates on NBFC regulatory compliance.</p>
+
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #333333;"><tr><td style="padding-top:14px;">
+          <p class="aumyaa-white-text" style="color:#ffffff;font-size:12px;margin:0;text-align:center;">Warm regards,<br>Team Aumyaa</p>
+          <p style="color:#666666;font-size:10px;margin:14px 0 0 0;text-align:center;">You are receiving this because you are on the Aumyaa regulatory alerts list. To stop receiving these, reply to this email with "Unsubscribe".</p>
+          </td></tr></table>
+
           </td></tr>
 
           </table>
