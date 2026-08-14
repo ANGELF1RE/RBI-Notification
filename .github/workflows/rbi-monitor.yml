@@ -290,7 +290,7 @@ jobs:
 
           <!-- ITEM LIST -->
           <tr><td style="padding:8px 24px 8px 24px;">
-          <p class="aumyaa-body-text" style="color:#111111;font-size:15px;margin:16px 0 0 0;">Hi team,</p>
+          <p class="aumyaa-body-text" style="color:#111111;font-size:15px;margin:16px 0 0 0;">Hi Team,</p>
           <p style="color:#555555;font-size:14px;margin:2px 0 4px 0;">Please find the recent regulatory update &mdash; <b class="aumyaa-body-text" style="color:#111111;">{total} new item(s)</b> published.</p>
           {cards}
           </td></tr>
