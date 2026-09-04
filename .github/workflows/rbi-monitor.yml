@@ -74,9 +74,13 @@ jobs:
       # ---------------- Email ----------------
       - name: Send email alert
         if: steps.notif.outputs.new_found == 'true' || steps.md.outputs.new_found == 'true' || steps.sebi.outputs.new_found == 'true' || steps.certin.outputs.new_found == 'true'
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: |
           python3 - <<'EOF'
-          import json, smtplib, textwrap
+          import json, smtplib, textwrap, os
           from datetime import date
           from email.mime.text import MIMEText
           from email.mime.multipart import MIMEMultipart
@@ -344,9 +348,10 @@ jobs:
           </table>
           </body></html>""")
 
-          gmail_user = "${{ secrets.GMAIL_USER }}"
-          gmail_pass = "${{ secrets.GMAIL_APP_PASSWORD }}"
-          to_email_list = [e.strip() for e in "${{ secrets.ALERT_EMAIL }}".split(",")]
+          gmail_user = os.environ.get("GMAIL_USER", "")
+          gmail_pass = os.environ.get("GMAIL_APP_PASSWORD", "")
+          raw_emails = os.environ.get("ALERT_EMAIL", "").replace("\n", ",").replace("\r", ",")
+          to_email_list = [e.strip() for e in raw_emails.split(",") if e.strip()]
 
           parts = []
           if notif_items:  parts.append(f"{len(notif_items)} RBI Notification(s)")
